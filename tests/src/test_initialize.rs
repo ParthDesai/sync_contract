@@ -65,7 +65,7 @@ pub fn init_program(
 
 #[test]
 fn test_initialize() {
-    let program_id = "mDThuqfND6diLJhPqe12PTfYKBpWrpEbZht3RJtABMt";
+    let program_id = "HkUDiDMSDntG1p4CgEaT9nhVrZ6MpPTVyL8rYiX3nvxy";
     let anchor_rpc_client = RpcClient::new(Cluster::Localnet.url());
 
     let payer = Keypair::new();

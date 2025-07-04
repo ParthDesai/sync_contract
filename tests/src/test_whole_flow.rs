@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use anchor_client::solana_sdk::keccak;
 use anchor_client::{Client, Cluster};
 use anchor_client::anchor_lang::Id;
 use anchor_client::anchor_lang::prelude::{Pubkey, System};
@@ -7,12 +8,12 @@ use anchor_client::solana_sdk::commitment_config::CommitmentConfig;
 use anchor_client::solana_sdk::native_token::LAMPORTS_PER_SOL;
 use anchor_client::solana_sdk::signature::Keypair;
 use anchor_client::solana_sdk::signer::Signer;
-use sync_contract::types::{AgentConfig, AgentResponse, DataHeader, Datasubmission, CURRENT_VERSION, DATA_LINK_SIZE};
+use sync_contract::types::{AgentConfig, AgentResponse, DataHeader, Datasubmission, CURRENT_VERSION, DATA_LINK_SIZE, PRIMARY_CATEGORY_SIZE, RESERVED_SIZE, SECONDARY_CATEGORY_SIZE};
 use crate::test_initialize::init_program;
 
 #[test]
 fn test_whole_flow() {
-    let program_id = "mDThuqfND6diLJhPqe12PTfYKBpWrpEbZht3RJtABMt";
+    let program_id = "HkUDiDMSDntG1p4CgEaT9nhVrZ6MpPTVyL8rYiX3nvxy";
     let anchor_rpc_client = RpcClient::new(Cluster::Localnet.url());
 
     let payer = Keypair::new();
@@ -87,8 +88,17 @@ fn test_whole_flow() {
     let data_link = "Hello world";
     let mut data_link_bytes = [0u8; DATA_LINK_SIZE];
     data_link_bytes[0..data_link.as_bytes().len()].copy_from_slice(data_link.as_bytes());
+
+    let primary_category = "Healthcare";
+    let mut primary_category_bytes = [0u8; PRIMARY_CATEGORY_SIZE];
+    primary_category_bytes[0..primary_category.as_bytes().len()].copy_from_slice(primary_category.as_bytes());
+
+    let secondary_category = "PatientData";
+    let mut secondary_category_bytes = [0u8; SECONDARY_CATEGORY_SIZE];
+    secondary_category_bytes[0..secondary_category.as_bytes().len()].copy_from_slice(secondary_category.as_bytes());
+
     let (data_submission, _) = Pubkey::find_program_address(
-        &[b"sync_program".as_ref(), b"data_submission".as_ref(), data_link.as_bytes()],
+        &[b"sync_program".as_ref(), b"data_submission".as_ref(), keccak::hash(data_link.as_bytes()).as_ref()],
         &program.id(),
     );
 
@@ -101,6 +111,8 @@ fn test_whole_flow() {
         })
         .args(sync_contract::instruction::SubmitData {
             data_link: data_link.to_string(),
+            primary_category: primary_category.to_string(),
+            secondary_category: secondary_category.to_string(),
         })
         .payer(&user)
         .send().expect("user should be able to submit some data");
@@ -113,7 +125,11 @@ fn test_whole_flow() {
         version: CURRENT_VERSION,
         data_link: data_link_bytes,
         agent_response: None,
-        data_header: DataHeader {},
+        data_header: DataHeader {
+            primary_category: primary_category_bytes,
+            secondary_category: secondary_category_bytes,
+            reserved: [0u8; RESERVED_SIZE],
+        },
     });
 
     // Agent cannot rate it without being enabled
@@ -127,6 +143,7 @@ fn test_whole_flow() {
         .args(sync_contract::instruction::RateData {
             data_link: data_link.to_string(),
             passed: true,
+            rating: 100,
         })
         .payer(&agent)
         .send().expect_err("disabled agent must not be able to rate some data");
@@ -164,6 +181,7 @@ fn test_whole_flow() {
         .args(sync_contract::instruction::RateData {
             data_link: data_link.to_string(),
             passed: true,
+            rating: 100,
         })
         .payer(&agent)
         .send().expect("enabled agent must be able to rate some data");
@@ -178,8 +196,14 @@ fn test_whole_flow() {
         agent_response: Some(AgentResponse {
             agent_key: agent.pubkey(),
             response: true,
+            rating: 100,
+            calculated_credits: 100,
         }),
-        data_header: DataHeader {},
+        data_header: DataHeader {
+            primary_category: primary_category_bytes,
+            secondary_category: secondary_category_bytes,
+            reserved: [0u8; RESERVED_SIZE],
+        },
     });
 
     program
@@ -192,6 +216,7 @@ fn test_whole_flow() {
         .args(sync_contract::instruction::RateData {
             data_link: data_link.to_string(),
             passed: true,
+            rating: 100,
         })
         .payer(&agent)
         .send().expect_err("enabled agent cannot rate data again");

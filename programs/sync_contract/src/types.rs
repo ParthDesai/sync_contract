@@ -3,26 +3,33 @@ use anchor_lang::prelude::Pubkey;
 
 pub const CURRENT_VERSION: u8 = 1;
 pub const DATA_LINK_SIZE: usize = 256;
+pub const PRIMARY_CATEGORY_SIZE: usize = 32;
+pub const SECONDARY_CATEGORY_SIZE: usize = 32;
+pub const RESERVED_SIZE: usize = 128;
 
 #[account]
 #[derive(Eq, PartialEq, Debug)]
 pub struct AgentResponse {
     pub agent_key: Pubkey,
-    pub response: bool
+    pub response: bool,
+    pub rating: u8,
+    pub calculated_credits: u128,
 }
 
 impl AgentResponse {
-    pub const MAX_SIZE: usize = 1 + 32;
+    pub const MAX_SIZE: usize = 1 + 32 + 1 + 16;
 }
 
 #[account]
 #[derive(Eq, PartialEq, Debug)]
 pub struct DataHeader {
-    // To be added
+    pub primary_category: [u8; PRIMARY_CATEGORY_SIZE],
+    pub secondary_category: [u8; SECONDARY_CATEGORY_SIZE],
+    pub reserved: [u8; 128]
 }
 
 impl DataHeader {
-    pub const MAX_SIZE: usize = 0;
+    pub const MAX_SIZE: usize = PRIMARY_CATEGORY_SIZE + SECONDARY_CATEGORY_SIZE + RESERVED_SIZE;
 }
 
 #[account]

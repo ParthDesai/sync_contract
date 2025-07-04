@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-sync_contract = "mDThuqfND6diLJhPqe12PTfYKBpWrpEbZht3RJtABMt"
+sync_contract = "HkUDiDMSDntG1p4CgEaT9nhVrZ6MpPTVyL8rYiX3nvxy"
 
 [registry]
 url = "https://api.apr.dev"
