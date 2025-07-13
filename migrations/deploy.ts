@@ -7,16 +7,39 @@ import { Program } from "@coral-xyz/anchor";
 import { SyncContract } from "../target/types/sync_contract";
 import bs58 from "bs58";
 
-module.exports = async function (provider: anchor.AnchorProvider) {
-  // Configure client to use the provider.
-  anchor.setProvider(provider);
-
-  console.log("🚀 Starting deployment...");
+// Function to get deployment mode from environment variable
+function getDeploymentMode(): string {
+  const mode = process.env.DEPLOY_MODE;
   
-  // Get the program
-  const program = anchor.workspace.SyncContract as Program<SyncContract>;
+  if (!mode) {
+    console.log("❌ Error: Missing required environment variable");
+    console.log("");
+    console.log("Usage:");
+    console.log("  DEPLOY_MODE=normal anchor deploy                    # Normal deployment");
+    console.log("  DEPLOY_MODE=mint_authority_transfer anchor deploy   # Mint authority transfer");
+    console.log("");
+    process.exit(1);
+  }
+  
+  if (mode !== 'normal' && mode !== 'mint_authority_transfer') {
+    console.log("❌ Error: Invalid DEPLOY_MODE specified");
+    console.log(`   Received: ${mode}`);
+    console.log("");
+    console.log("Valid modes:");
+    console.log("  DEPLOY_MODE=normal                    # Normal deployment");
+    console.log("  DEPLOY_MODE=mint_authority_transfer   # Mint authority transfer");
+    console.log("");
+    process.exit(1);
+  }
+  
+  return mode;
+}
+
+// Normal deployment function
+async function normalDeployment(provider: anchor.AnchorProvider, program: Program<SyncContract>) {
   const programId = program.programId;
   
+  console.log("\n🚀 Starting normal deployment...");
   console.log("📋 Program ID:", programId.toString());
   console.log("🔑 Admin (Payer):", provider.wallet.publicKey.toString());
   
@@ -146,5 +169,50 @@ module.exports = async function (provider: anchor.AnchorProvider) {
     console.log("");
   });
   
-  console.log("🎉 Deployment completed successfully!");
+  console.log("🎉 Normal deployment completed successfully!");
+}
+
+// Import and run mint authority transfer
+async function runMintAuthorityTransfer(provider: anchor.AnchorProvider, program: Program<SyncContract>) {
+  console.log("\n🔄 Starting mint authority transfer...");
+  
+  try {
+    // Import the transfer mint authority module
+    const transferMintAuthority = require('./transfer_mint_authority');
+    await transferMintAuthority(provider);
+    console.log("✅ Mint authority transfer completed successfully!");
+  } catch (error) {
+    console.error("❌ Error during mint authority transfer:", error);
+    throw error;
+  }
+}
+
+module.exports = async function (provider: anchor.AnchorProvider) {
+  // Configure client to use the provider.
+  anchor.setProvider(provider);
+
+  // Get the program
+  const program = anchor.workspace.SyncContract as Program<SyncContract>;
+  
+  try {
+    // Get deployment mode from environment variable
+    const mode = getDeploymentMode();
+    
+    console.log(`🎯 Running in ${mode} mode...`);
+    
+    switch (mode) {
+      case 'normal':
+        await normalDeployment(provider, program);
+        break;
+      case 'mint_authority_transfer':
+        await runMintAuthorityTransfer(provider, program);
+        break;
+      default:
+        console.log("❌ Invalid mode. This should not happen.");
+        process.exit(1);
+    }
+  } catch (error) {
+    console.error("❌ Deployment failed:", error);
+    process.exit(1);
+  }
 };
