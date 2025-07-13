@@ -1,45 +1,127 @@
-use std::str::FromStr;
-use anchor_client::solana_sdk::keccak;
-use anchor_client::{Client, Cluster};
-use anchor_client::anchor_lang::Id;
+use crate::test_initialize::init_program;
 use anchor_client::anchor_lang::prelude::{Pubkey, System};
+use anchor_client::anchor_lang::Id;
 use anchor_client::solana_client::rpc_client::RpcClient;
 use anchor_client::solana_sdk::commitment_config::CommitmentConfig;
+use anchor_client::solana_sdk::keccak;
 use anchor_client::solana_sdk::native_token::LAMPORTS_PER_SOL;
+use anchor_client::solana_sdk::program_pack::Pack;
 use anchor_client::solana_sdk::signature::Keypair;
 use anchor_client::solana_sdk::signer::Signer;
-use sync_contract::types::{AgentConfig, AgentResponse, DataHeader, Datasubmission, CURRENT_VERSION, DATA_LINK_SIZE, PRIMARY_CATEGORY_SIZE, RESERVED_SIZE, SECONDARY_CATEGORY_SIZE};
-use crate::test_initialize::init_program;
+use anchor_client::solana_sdk::system_instruction;
+use anchor_client::{Client, Cluster};
+use anchor_spl::associated_token::spl_associated_token_account;
+use anchor_spl::token_2022::spl_token_2022;
+use spl_token_2022::instruction::initialize_mint;
+use std::str::FromStr;
+use sync_contract::types::{
+    AgentConfig, AgentResponse, DataHeader, Datasubmission, UserConfig, CURRENT_VERSION,
+    DATAHEADER_RESERVED_SIZE, DATA_LINK_SIZE, PRIMARY_CATEGORY_SIZE, SECONDARY_CATEGORY_SIZE,
+    USER_CONFIG_RESERVED_SIZE,
+};
+
+fn create_mint_account(
+    rpc_client: &RpcClient,
+    payer: &Keypair,
+    mint_account: &Keypair,
+    mint_authority: &Pubkey,
+) {
+    // Create the mint account
+    let mint_account_rent = rpc_client
+        .get_minimum_balance_for_rent_exemption(spl_token::state::Mint::LEN)
+        .unwrap();
+
+    let create_mint_account_ix = system_instruction::create_account(
+        &payer.pubkey(),
+        &mint_account.pubkey(),
+        mint_account_rent * 10,
+        spl_token::state::Mint::LEN as u64,
+        &spl_token_2022::id(),
+    );
+
+    // Initialize the mint
+    let initialize_mint_ix = initialize_mint(
+        &spl_token_2022::id(),
+        &mint_account.pubkey(),
+        &mint_authority,
+        None,
+        9, // decimals
+    )
+    .unwrap();
+
+    // Create and send transaction
+    let recent_blockhash = rpc_client.get_latest_blockhash().unwrap();
+    let create_mint_tx = anchor_client::solana_sdk::transaction::Transaction::new_signed_with_payer(
+        &[create_mint_account_ix, initialize_mint_ix],
+        Some(&payer.pubkey()),
+        &[&payer, &mint_account],
+        recent_blockhash,
+    );
+
+    rpc_client
+        .send_and_confirm_transaction(&create_mint_tx)
+        .unwrap();
+}
 
 #[test]
 fn test_whole_flow() {
     let program_id = "HkUDiDMSDntG1p4CgEaT9nhVrZ6MpPTVyL8rYiX3nvxy";
-    let anchor_rpc_client = RpcClient::new(Cluster::Localnet.url());
+    let anchor_rpc_client =
+        RpcClient::new_with_commitment(Cluster::Localnet.url(), CommitmentConfig::finalized());
 
     let payer = Keypair::new();
+    println!("Payer Pubkey: {:?}", payer.pubkey());
     anchor_rpc_client
-        .request_airdrop(&payer.pubkey(), 10000 * LAMPORTS_PER_SOL)
+        .request_airdrop(&payer.pubkey(), 100 * LAMPORTS_PER_SOL)
         .unwrap();
 
     let agent = Keypair::new();
     anchor_rpc_client
-        .request_airdrop(&agent.pubkey(), 10000 * LAMPORTS_PER_SOL)
+        .request_airdrop(&agent.pubkey(), 100 * LAMPORTS_PER_SOL)
         .unwrap();
 
-    let user = Keypair::new();
+    let user = Keypair::from_bytes(&[
+        111, 232, 119, 3, 204, 103, 148, 61, 101, 39, 172, 229, 84, 19, 249, 25, 241, 122, 92, 144,
+        15, 24, 230, 118, 44, 108, 127, 132, 201, 169, 81, 153, 244, 17, 157, 161, 123, 98, 108,
+        38, 164, 47, 97, 229, 187, 72, 147, 182, 27, 98, 12, 166, 151, 127, 189, 28, 209, 234, 251,
+        118, 19, 58, 49, 130,
+    ])
+    .unwrap();
+    println!("User Pubkey: {:?}", user.pubkey());
     anchor_rpc_client
-        .request_airdrop(&user.pubkey(), 10000 * LAMPORTS_PER_SOL)
+        .request_airdrop(&user.pubkey(), 100 * LAMPORTS_PER_SOL)
         .unwrap();
+
+    std::thread::sleep(std::time::Duration::from_secs(10));
 
     let client = Client::new_with_options(Cluster::Localnet, &payer, CommitmentConfig::confirmed());
     let program_id = Pubkey::from_str(program_id).unwrap();
     let program = client.program(program_id).unwrap();
 
-    init_program(&program, &payer);
+    let (program_state_pubkey, _) = init_program(&program, &payer);
 
     let (agent_config, _) = Pubkey::find_program_address(
-        &[b"sync_program".as_ref(), b"agent_config".as_ref(), agent.pubkey().as_ref()],
+        &[
+            b"sync_program".as_ref(),
+            b"agent_config".as_ref(),
+            agent.pubkey().as_ref(),
+        ],
         &program.id(),
+    );
+
+    let mint_account = Keypair::from_bytes(&[
+        138, 100, 129, 3, 92, 243, 121, 32, 39, 179, 165, 170, 49, 143, 72, 19, 159, 154, 32, 251,
+        35, 136, 100, 65, 165, 143, 177, 235, 131, 247, 52, 210, 118, 112, 118, 167, 92, 207, 142,
+        251, 48, 187, 70, 117, 187, 189, 234, 102, 241, 57, 230, 62, 89, 76, 35, 214, 132, 18, 54,
+        144, 105, 28, 253, 91,
+    ])
+    .unwrap();
+    println!("Mint account Pubkey: {:?}", mint_account.pubkey());
+    create_mint_account(
+        &anchor_rpc_client,
+        &payer,
+        &mint_account,
+        &program_state_pubkey,
     );
 
     program
@@ -49,8 +131,7 @@ fn test_whole_flow() {
             signer: agent.pubkey(),
             system_program: System::id(),
         })
-        .args(sync_contract::instruction::CreateAgent {
-        })
+        .args(sync_contract::instruction::CreateAgent {})
         .payer(&agent)
         .send()
         .expect("Valid create agent request must succeed.");
@@ -58,10 +139,13 @@ fn test_whole_flow() {
     let agent_config_data: AgentConfig = program
         .account(agent_config.clone())
         .expect("Agent config must exists after creation");
-    assert_eq!(agent_config_data, AgentConfig {
-        version: CURRENT_VERSION,
-        is_enabled: false,
-    });
+    assert_eq!(
+        agent_config_data,
+        AgentConfig {
+            version: CURRENT_VERSION,
+            is_enabled: false,
+        }
+    );
 
     let (program_state, _) = Pubkey::find_program_address(
         &[b"sync_program".as_ref(), b"global_state".as_ref()],
@@ -76,11 +160,11 @@ fn test_whole_flow() {
             signer: agent.pubkey(),
         })
         .args(sync_contract::instruction::AllowAgent {
-            agent_key: agent.pubkey()
+            agent_key: agent.pubkey(),
         })
         .payer(&agent)
-        .send().expect_err("non admin must not be able to call allow agent");
-
+        .send()
+        .expect_err("non admin must not be able to call allow agent");
 
     // Not enabled agent cannot rate a submission
 
@@ -91,14 +175,29 @@ fn test_whole_flow() {
 
     let primary_category = "Healthcare";
     let mut primary_category_bytes = [0u8; PRIMARY_CATEGORY_SIZE];
-    primary_category_bytes[0..primary_category.as_bytes().len()].copy_from_slice(primary_category.as_bytes());
+    primary_category_bytes[0..primary_category.as_bytes().len()]
+        .copy_from_slice(primary_category.as_bytes());
 
     let secondary_category = "PatientData";
     let mut secondary_category_bytes = [0u8; SECONDARY_CATEGORY_SIZE];
-    secondary_category_bytes[0..secondary_category.as_bytes().len()].copy_from_slice(secondary_category.as_bytes());
+    secondary_category_bytes[0..secondary_category.as_bytes().len()]
+        .copy_from_slice(secondary_category.as_bytes());
 
     let (data_submission, _) = Pubkey::find_program_address(
-        &[b"sync_program".as_ref(), b"data_submission".as_ref(), keccak::hash(data_link.as_bytes()).as_ref()],
+        &[
+            b"sync_program".as_ref(),
+            b"data_submission".as_ref(),
+            keccak::hash(data_link.as_bytes()).as_ref(),
+        ],
+        &program.id(),
+    );
+
+    let (user_config_key, _) = Pubkey::find_program_address(
+        &[
+            b"sync_program".as_ref(),
+            b"user_config".as_ref(),
+            user.pubkey().as_ref(),
+        ],
         &program.id(),
     );
 
@@ -106,6 +205,7 @@ fn test_whole_flow() {
         .request()
         .accounts(sync_contract::accounts::SubmitData {
             data_submission,
+            user_config: user_config_key,
             signer: user.pubkey(),
             system_program: System::id(),
         })
@@ -115,22 +215,26 @@ fn test_whole_flow() {
             secondary_category: secondary_category.to_string(),
         })
         .payer(&user)
-        .send().expect("user should be able to submit some data");
-
+        .send()
+        .expect("user should be able to submit some data");
 
     let data_submission_content: Datasubmission = program
         .account(data_submission.clone())
         .expect("Data submission must exists after creation");
-    assert_eq!(data_submission_content, Datasubmission {
-        version: CURRENT_VERSION,
-        data_link: data_link_bytes,
-        agent_response: None,
-        data_header: DataHeader {
-            primary_category: primary_category_bytes,
-            secondary_category: secondary_category_bytes,
-            reserved: [0u8; RESERVED_SIZE],
-        },
-    });
+    assert_eq!(
+        data_submission_content,
+        Datasubmission {
+            version: CURRENT_VERSION,
+            data_link: data_link_bytes,
+            agent_response: None,
+            data_header: DataHeader {
+                primary_category: primary_category_bytes,
+                secondary_category: secondary_category_bytes,
+                reserved: [0u8; DATAHEADER_RESERVED_SIZE],
+            },
+            user_id: user.pubkey(),
+        }
+    );
 
     // Agent cannot rate it without being enabled
     program
@@ -138,6 +242,7 @@ fn test_whole_flow() {
         .accounts(sync_contract::accounts::RateData {
             data_submission,
             agent_config,
+            user_config: user_config_key,
             signer: agent.pubkey(),
         })
         .args(sync_contract::instruction::RateData {
@@ -146,8 +251,8 @@ fn test_whole_flow() {
             rating: 100,
         })
         .payer(&agent)
-        .send().expect_err("disabled agent must not be able to rate some data");
-
+        .send()
+        .expect_err("disabled agent must not be able to rate some data");
 
     program
         .request()
@@ -157,60 +262,81 @@ fn test_whole_flow() {
             signer: payer.pubkey(),
         })
         .args(sync_contract::instruction::AllowAgent {
-            agent_key: agent.pubkey()
+            agent_key: agent.pubkey(),
         })
-        .send().expect("admin must be able to call allow agent");
-
-
+        .send()
+        .expect("admin must be able to call allow agent");
 
     let agent_config_data: AgentConfig = program
         .account(agent_config.clone())
         .expect("Agent config must exists after creation");
-    assert_eq!(agent_config_data, AgentConfig {
-        version: CURRENT_VERSION,
-        is_enabled: true,
-    });
+    assert_eq!(
+        agent_config_data,
+        AgentConfig {
+            version: CURRENT_VERSION,
+            is_enabled: true,
+        }
+    );
 
     program
         .request()
         .accounts(sync_contract::accounts::RateData {
             data_submission,
             agent_config,
+            user_config: user_config_key,
             signer: agent.pubkey(),
         })
         .args(sync_contract::instruction::RateData {
             data_link: data_link.to_string(),
             passed: true,
-            rating: 100,
+            rating: 85,
         })
         .payer(&agent)
-        .send().expect("enabled agent must be able to rate some data");
-
+        .send()
+        .expect("enabled agent must be able to rate some data");
 
     let data_submission_content: Datasubmission = program
         .account(data_submission.clone())
         .expect("Data submission must exists after creation");
-    assert_eq!(data_submission_content, Datasubmission {
-        version: CURRENT_VERSION,
-        data_link: data_link_bytes,
-        agent_response: Some(AgentResponse {
-            agent_key: agent.pubkey(),
-            response: true,
-            rating: 100,
-            calculated_credits: 100,
-        }),
-        data_header: DataHeader {
-            primary_category: primary_category_bytes,
-            secondary_category: secondary_category_bytes,
-            reserved: [0u8; RESERVED_SIZE],
-        },
-    });
+    assert_eq!(
+        data_submission_content,
+        Datasubmission {
+            version: CURRENT_VERSION,
+            data_link: data_link_bytes,
+            agent_response: Some(AgentResponse {
+                agent_key: agent.pubkey(),
+                response: true,
+                rating: 85,
+                calculated_credits: 85,
+            }),
+            data_header: DataHeader {
+                primary_category: primary_category_bytes,
+                secondary_category: secondary_category_bytes,
+                reserved: [0u8; DATAHEADER_RESERVED_SIZE],
+            },
+            user_id: user.pubkey(),
+        }
+    );
+
+    let user_config_content: UserConfig = program
+        .account(user_config_key.clone())
+        .expect("User config must exists after creation");
+
+    assert_eq!(
+        user_config_content,
+        UserConfig {
+            version: 1,
+            accumulated_credits: 85,
+            reserved: [0; USER_CONFIG_RESERVED_SIZE],
+        }
+    );
 
     program
         .request()
         .accounts(sync_contract::accounts::RateData {
             data_submission,
             agent_config,
+            user_config: user_config_key,
             signer: agent.pubkey(),
         })
         .args(sync_contract::instruction::RateData {
@@ -219,5 +345,202 @@ fn test_whole_flow() {
             rating: 100,
         })
         .payer(&agent)
-        .send().expect_err("enabled agent cannot rate data again");
+        .send()
+        .expect_err("enabled agent cannot rate data again");
+
+    // We create another data link
+    let data_link = "Hello world 1";
+    let mut data_link_bytes = [0u8; DATA_LINK_SIZE];
+    data_link_bytes[0..data_link.as_bytes().len()].copy_from_slice(data_link.as_bytes());
+
+    let primary_category = "Healthcare";
+    let mut primary_category_bytes = [0u8; PRIMARY_CATEGORY_SIZE];
+    primary_category_bytes[0..primary_category.as_bytes().len()]
+        .copy_from_slice(primary_category.as_bytes());
+
+    let secondary_category = "PatientData";
+    let mut secondary_category_bytes = [0u8; SECONDARY_CATEGORY_SIZE];
+    secondary_category_bytes[0..secondary_category.as_bytes().len()]
+        .copy_from_slice(secondary_category.as_bytes());
+
+    let (data_submission, _) = Pubkey::find_program_address(
+        &[
+            b"sync_program".as_ref(),
+            b"data_submission".as_ref(),
+            keccak::hash(data_link.as_bytes()).as_ref(),
+        ],
+        &program.id(),
+    );
+
+    program
+        .request()
+        .accounts(sync_contract::accounts::SubmitData {
+            data_submission,
+            user_config: user_config_key,
+            signer: user.pubkey(),
+            system_program: System::id(),
+        })
+        .args(sync_contract::instruction::SubmitData {
+            data_link: data_link.to_string(),
+            primary_category: primary_category.to_string(),
+            secondary_category: secondary_category.to_string(),
+        })
+        .payer(&user)
+        .send()
+        .expect("user should be able to submit some data");
+
+    let data_submission_content: Datasubmission = program
+        .account(data_submission.clone())
+        .expect("Data submission must exists after creation");
+    assert_eq!(
+        data_submission_content,
+        Datasubmission {
+            version: CURRENT_VERSION,
+            data_link: data_link_bytes,
+            agent_response: None,
+            data_header: DataHeader {
+                primary_category: primary_category_bytes,
+                secondary_category: secondary_category_bytes,
+                reserved: [0u8; DATAHEADER_RESERVED_SIZE],
+            },
+            user_id: user.pubkey(),
+        }
+    );
+
+    // Agent rates data once again
+    program
+        .request()
+        .accounts(sync_contract::accounts::RateData {
+            data_submission,
+            agent_config,
+            user_config: user_config_key,
+            signer: agent.pubkey(),
+        })
+        .args(sync_contract::instruction::RateData {
+            data_link: data_link.to_string(),
+            passed: true,
+            rating: 82,
+        })
+        .payer(&agent)
+        .send()
+        .expect("enabled agent must be able to rate some data");
+
+    let user_config_content: UserConfig = program
+        .account(user_config_key.clone())
+        .expect("User config must exists after creation");
+
+    assert_eq!(
+        user_config_content,
+        UserConfig {
+            version: 1,
+            accumulated_credits: 167,
+            reserved: [0; USER_CONFIG_RESERVED_SIZE],
+        }
+    );
+
+    let associated_token_account =
+        spl_associated_token_account::get_associated_token_address_with_program_id(
+            &user.pubkey(),
+            &mint_account.pubkey(),
+            &spl_token_2022::id(),
+        );
+
+    println!("Program state: {}", program_state);
+    println!("User config: {}", user_config_key);
+    println!("Mint account: {}", mint_account.pubkey());
+    println!("Associated token account: {}", associated_token_account);
+    println!("User: {}", user.pubkey());
+    println!("System program: {}", System::id());
+    println!("Token program: {}", spl_token_2022::id());
+    println!(
+        "Associated token program: {}",
+        spl_associated_token_account::id()
+    );
+
+    // Now claim the credits
+    program
+        .request()
+        .accounts(sync_contract::accounts::ClaimCredits {
+            program_state,
+            user_config: user_config_key,
+            mint: mint_account.pubkey(),
+            token_account: associated_token_account,
+            signer: user.pubkey(),
+            system_program: System::id(),
+            token_program: spl_token_2022::id(),
+            associated_token_program: spl_associated_token_account::id(),
+        })
+        .args(sync_contract::instruction::ClaimCredits {})
+        .payer(&user)
+        .send()
+        .expect("user should be able to claim credits");
+
+    std::thread::sleep(std::time::Duration::from_secs(20));
+
+    let token_account_info = anchor_rpc_client
+        .get_token_account(&associated_token_account)
+        .unwrap();
+    assert_eq!(
+        token_account_info.unwrap().token_amount.amount,
+        167.to_string()
+    );
+
+    // User credit should be 0
+    let user_config_content: UserConfig = program
+        .account(user_config_key.clone())
+        .expect("User config must exists after creation");
+    assert_eq!(
+        user_config_content,
+        UserConfig {
+            version: 1,
+            accumulated_credits: 0,
+            reserved: [0; USER_CONFIG_RESERVED_SIZE],
+        }
+    );
+
+    // Pass the mint authority to the new address can only be done by the admin
+    program
+        .request()
+        .accounts(sync_contract::accounts::TransferMintAuthority {
+            program_state,
+            signer: user.pubkey(),
+            system_program: System::id(),
+            mint: mint_account.pubkey(),
+            token_program: spl_token_2022::id(),
+        })
+        .args(sync_contract::instruction::TransferMintAuthority {
+            new_authority: payer.pubkey(),
+        })
+        .payer(&user)
+        .send()
+        .expect_err("user must not be able to transfer mint authority");
+
+    // Now transfer the mint authority to the admin
+    program
+        .request()
+        .accounts(sync_contract::accounts::TransferMintAuthority {
+            program_state,
+            signer: payer.pubkey(),
+            system_program: System::id(),
+            mint: mint_account.pubkey(),
+            token_program: spl_token_2022::id(),
+        })
+        .args(sync_contract::instruction::TransferMintAuthority {
+            new_authority: payer.pubkey(),
+        })
+        .send()
+        .expect("admin must be able to transfer mint authority");
+
+    // Now claim credits cannot be done by user
+    program.request().accounts(sync_contract::accounts::ClaimCredits {
+        program_state,
+        user_config: user_config_key,
+        mint: mint_account.pubkey(),
+        token_account: associated_token_account,
+        signer: user.pubkey(),
+        system_program: System::id(),
+        token_program: spl_token_2022::id(),
+        associated_token_program: spl_associated_token_account::id(),
+    }).args(sync_contract::instruction::ClaimCredits {
+    }).payer(&user).send().expect_err("user should not be able to claim credits as program state is not mint authority anymore");
 }

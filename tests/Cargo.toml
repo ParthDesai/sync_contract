@@ -6,4 +6,6 @@ edition = "2021"
 
 [dependencies]
 anchor-client = "0.31.1"
+anchor-spl = { version = "0.31.1" }
+spl-token = "4.0"
 sync_contract = { version = "0.1.0", path = "../programs/sync_contract" }
