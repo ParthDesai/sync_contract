@@ -206,7 +206,10 @@ pub mod sync_contract {
         ];
         let binding = [signer_seeds.as_ref()];
         let cpi_context = CpiContext::new(cpi_program, cpi_accounts).with_signer(binding.as_ref());
-        token_interface::mint_to(cpi_context, accumulated_credits as u64)?;
+        token_interface::mint_to(
+            cpi_context,
+            (accumulated_credits as u64) * 10u64.pow(ctx.accounts.mint.decimals as u32),
+        )?;
 
         ctx.accounts.user_config.accumulated_credits = 0;
 

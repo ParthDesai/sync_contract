@@ -13,6 +13,7 @@ use anchor_client::{Client, Cluster};
 use anchor_spl::associated_token::spl_associated_token_account;
 use anchor_spl::token_2022::spl_token_2022;
 use spl_token_2022::instruction::initialize_mint;
+use spl_token_2022::state::Mint;
 use std::str::FromStr;
 use sync_contract::types::{
     AgentConfig, AgentResponse, DataHeader, Datasubmission, UserConfig, CURRENT_VERSION,
@@ -61,6 +62,36 @@ fn create_mint_account(
     rpc_client
         .send_and_confirm_transaction(&create_mint_tx)
         .unwrap();
+}
+
+fn fetch_mint_account(
+    rpc_client: &RpcClient,
+    mint_pubkey: &Pubkey,
+) -> Result<Mint, Box<dyn std::error::Error>> {
+    // Get the account data
+    let account_data = rpc_client.get_account_data(mint_pubkey)?;
+
+    // Unpack the mint data
+    let mint = Mint::unpack(&account_data)?;
+
+    Ok(mint)
+}
+
+fn print_mint_info(rpc_client: &RpcClient, mint_pubkey: &Pubkey) {
+    match fetch_mint_account(rpc_client, mint_pubkey) {
+        Ok(mint) => {
+            println!("📊 MINT ACCOUNT INFO:");
+            println!("   Address: {}", mint_pubkey);
+            println!("   Mint Authority: {:?}", mint.mint_authority);
+            println!("   Supply: {}", mint.supply);
+            println!("   Decimals: {}", mint.decimals);
+            println!("   Is Initialized: {}", mint.is_initialized);
+            println!("   Freeze Authority: {:?}", mint.freeze_authority);
+        }
+        Err(e) => {
+            println!("❌ Error fetching mint account {}: {}", mint_pubkey, e);
+        }
+    }
 }
 
 #[test]
@@ -123,6 +154,9 @@ fn test_whole_flow() {
         &mint_account,
         &program_state_pubkey,
     );
+
+    // Fetch and display mint account information
+    print_mint_info(&anchor_rpc_client, &mint_account.pubkey());
 
     program
         .request()
@@ -480,9 +514,13 @@ fn test_whole_flow() {
     let token_account_info = anchor_rpc_client
         .get_token_account(&associated_token_account)
         .unwrap();
+
+    let mint_account_contents =
+        fetch_mint_account(&anchor_rpc_client, &mint_account.pubkey()).unwrap();
+
     assert_eq!(
         token_account_info.unwrap().token_amount.amount,
-        167.to_string()
+        (167 * 10u64.pow(mint_account_contents.decimals as u32)).to_string()
     );
 
     // User credit should be 0
@@ -530,6 +568,17 @@ fn test_whole_flow() {
         })
         .send()
         .expect("admin must be able to transfer mint authority");
+
+    std::thread::sleep(std::time::Duration::from_secs(20));
+
+    // Verify the mint authority has changed
+    println!("\n🔄 After transferring mint authority:");
+    print_mint_info(&anchor_rpc_client, &mint_account.pubkey());
+
+    // You can also use fetch_mint_account directly for programmatic checks
+    let mint_info = fetch_mint_account(&anchor_rpc_client, &mint_account.pubkey())
+        .expect("Should be able to fetch mint account");
+    assert_eq!(mint_info.mint_authority, Some(payer.pubkey()).into());
 
     // Now claim credits cannot be done by user
     program.request().accounts(sync_contract::accounts::ClaimCredits {
