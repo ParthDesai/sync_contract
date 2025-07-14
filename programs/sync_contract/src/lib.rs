@@ -14,6 +14,8 @@ use anchor_lang::error_code;
 use anchor_lang::solana_program::keccak;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_2022::spl_token_2022;
+#[cfg(not(feature = "no-entrypoint"))]
+use solana_security_txt::security_txt;
 
 #[error_code]
 pub enum SyncError {
@@ -43,6 +45,16 @@ pub fn calculate_credits(rating: u8) -> u128 {
     } else {
         0
     }
+}
+
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+    name:  "Syncora.ai Contract",
+    project_url:  "https://syncora.ai",
+    contacts:  "email:support@syncora.ai",
+    policy:  "https://www.syncora.ai/privacyPolicy",
+    preferred_languages: "en",
+    source_code: "" 
 }
 
 #[program]
