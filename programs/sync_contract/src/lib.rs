@@ -40,7 +40,7 @@ pub enum SyncError {
 }
 
 pub fn calculate_credits(rating: u8) -> u128 {
-    if rating >= 80 {
+    if rating >= 60 {
         rating as u128
     } else {
         0
@@ -54,7 +54,7 @@ security_txt! {
     contacts:  "email:support@syncora.ai",
     policy:  "https://www.syncora.ai/privacyPolicy",
     preferred_languages: "en",
-    source_code: "" 
+    source_code: ""
 }
 
 #[program]
@@ -227,6 +227,32 @@ pub mod sync_contract {
 
         Ok(())
     }
+
+    pub fn demo_claim_credits(
+        ctx: Context<DemoClaimCredits>,
+        accumulated_credits: u64,
+    ) -> Result<()> {
+        let cpi_accounts = MintTo {
+            mint: ctx.accounts.mint.to_account_info(),
+            to: ctx.accounts.token_account.to_account_info(),
+            authority: ctx.accounts.program_state.to_account_info(),
+        };
+
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let signer_seeds = [
+            b"sync_program".as_ref(),
+            b"global_state".as_ref(),
+            &[ctx.bumps.program_state],
+        ];
+        let binding = [signer_seeds.as_ref()];
+        let cpi_context = CpiContext::new(cpi_program, cpi_accounts).with_signer(binding.as_ref());
+        token_interface::mint_to(
+            cpi_context,
+            (accumulated_credits as u64) * 10u64.pow(ctx.accounts.mint.decimals as u32),
+        )?;
+
+        Ok(())
+    }
 }
 
 fn hash_data_link(data_link: &String) -> [u8; 32] {
@@ -346,6 +372,37 @@ pub struct RateData<'info> {
 
 #[derive(Accounts)]
 pub struct ClaimCredits<'info> {
+    #[account(
+        seeds = [b"sync_program".as_ref(), b"global_state".as_ref()],
+        bump,
+    )]
+    pub program_state: Account<'info, ProgramState>,
+    #[account(
+        mut,
+        seeds = [b"sync_program".as_ref(), b"user_config".as_ref(), signer.key().as_ref()],
+        bump,
+    )]
+    pub user_config: Account<'info, UserConfig>,
+    #[account(mut)]
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        init_if_needed,
+        payer = signer,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+        associated_token::token_program = token_program,
+    )]
+    pub token_account: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+#[derive(Accounts)]
+pub struct DemoClaimCredits<'info> {
     #[account(
         seeds = [b"sync_program".as_ref(), b"global_state".as_ref()],
         bump,

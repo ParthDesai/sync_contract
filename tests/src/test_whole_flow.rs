@@ -536,6 +536,39 @@ fn test_whole_flow() {
         }
     );
 
+    // This is for DEMO only
+    // Remove this after demo
+    // Demo claim credits works
+    program
+        .request()
+        .accounts(sync_contract::accounts::DemoClaimCredits {
+            program_state,
+            user_config: user_config_key,
+            mint: mint_account.pubkey(),
+            token_account: associated_token_account,
+            signer: user.pubkey(),
+            system_program: System::id(),
+            token_program: spl_token_2022::id(),
+            associated_token_program: spl_associated_token_account::id(),
+        })
+        .args(sync_contract::instruction::DemoClaimCredits {
+            accumulated_credits: 1000,
+        })
+        .payer(&user)
+        .send()
+        .expect("user should be able to claim demo credits");
+
+    std::thread::sleep(std::time::Duration::from_secs(20));
+
+    let token_account_info = anchor_rpc_client
+        .get_token_account(&associated_token_account)
+        .unwrap();
+
+    assert_eq!(
+        token_account_info.unwrap().token_amount.amount,
+        ((167 + 1000) * 10u64.pow(mint_account_contents.decimals as u32)).to_string()
+    );
+
     // Pass the mint authority to the new address can only be done by the admin
     program
         .request()
