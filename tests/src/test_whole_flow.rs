@@ -1,6 +1,6 @@
 use crate::test_initialize::init_program;
 use anchor_client::anchor_lang::prelude::{Pubkey, System};
-use anchor_client::anchor_lang::Id;
+use anchor_client::anchor_lang::{AnchorDeserialize, AnchorSerialize, Id};
 use anchor_client::solana_client::rpc_client::RpcClient;
 use anchor_client::solana_sdk::commitment_config::CommitmentConfig;
 use anchor_client::solana_sdk::keccak;
@@ -16,9 +16,9 @@ use spl_token_2022::instruction::initialize_mint;
 use spl_token_2022::state::Mint;
 use std::str::FromStr;
 use sync_contract::types::{
-    AgentConfig, AgentResponse, DataHeader, Datasubmission, UserConfig, CURRENT_VERSION,
-    DATAHEADER_RESERVED_SIZE, DATA_LINK_SIZE, PRIMARY_CATEGORY_SIZE, SECONDARY_CATEGORY_SIZE,
-    USER_CONFIG_RESERVED_SIZE,
+    AgentConfig, AgentResponseV2, DataHeader, DataSubmissionV2, Datasubmission, UserConfig,
+    CURRENT_VERSION, DATAHEADER_RESERVED_SIZE, DATA_LINK_SIZE, PRIMARY_CATEGORY_SIZE,
+    SECONDARY_CATEGORY_SIZE, USER_CONFIG_RESERVED_SIZE,
 };
 
 fn create_mint_account(
@@ -194,13 +194,18 @@ fn test_whole_flow() {
             signer: agent.pubkey(),
         })
         .args(sync_contract::instruction::AllowAgent {
-            agent_key: agent.pubkey(),
+            _agent_key: agent.pubkey(),
         })
         .payer(&agent)
         .send()
         .expect_err("non admin must not be able to call allow agent");
 
     // Not enabled agent cannot rate a submission
+
+    let synthetic_data_link = "Hello World processed";
+    let mut synthetic_data_link_bytes = [0u8; DATA_LINK_SIZE];
+    synthetic_data_link_bytes[0..synthetic_data_link.as_bytes().len()]
+        .copy_from_slice(synthetic_data_link.as_bytes());
 
     // Submitting some data
     let data_link = "Hello world";
@@ -257,8 +262,7 @@ fn test_whole_flow() {
         .expect("Data submission must exists after creation");
     assert_eq!(
         data_submission_content,
-        Datasubmission {
-            version: CURRENT_VERSION,
+        Datasubmission::V2(DataSubmissionV2 {
             data_link: data_link_bytes,
             agent_response: None,
             data_header: DataHeader {
@@ -267,7 +271,7 @@ fn test_whole_flow() {
                 reserved: [0u8; DATAHEADER_RESERVED_SIZE],
             },
             user_id: user.pubkey(),
-        }
+        })
     );
 
     // Agent cannot rate it without being enabled
@@ -280,9 +284,10 @@ fn test_whole_flow() {
             signer: agent.pubkey(),
         })
         .args(sync_contract::instruction::RateData {
-            data_link: data_link.to_string(),
-            passed: true,
+            _data_link: data_link.to_string(),
+            is_seed_deleted: true,
             rating: 100,
+            synthetic_data_link: None,
         })
         .payer(&agent)
         .send()
@@ -296,7 +301,7 @@ fn test_whole_flow() {
             signer: payer.pubkey(),
         })
         .args(sync_contract::instruction::AllowAgent {
-            agent_key: agent.pubkey(),
+            _agent_key: agent.pubkey(),
         })
         .send()
         .expect("admin must be able to call allow agent");
@@ -312,6 +317,7 @@ fn test_whole_flow() {
         }
     );
 
+    // On rating agent must have deleted the file
     program
         .request()
         .accounts(sync_contract::accounts::RateData {
@@ -321,9 +327,29 @@ fn test_whole_flow() {
             signer: agent.pubkey(),
         })
         .args(sync_contract::instruction::RateData {
-            data_link: data_link.to_string(),
-            passed: true,
+            _data_link: data_link.to_string(),
+            is_seed_deleted: false,
             rating: 85,
+            synthetic_data_link: Some(synthetic_data_link.to_string()),
+        })
+        .payer(&agent)
+        .send()
+        .expect_err("enabled agent must be deleting data");
+
+    // Valid rate data instruction must be successful
+    program
+        .request()
+        .accounts(sync_contract::accounts::RateData {
+            data_submission,
+            agent_config,
+            user_config: user_config_key,
+            signer: agent.pubkey(),
+        })
+        .args(sync_contract::instruction::RateData {
+            _data_link: data_link.to_string(),
+            is_seed_deleted: true,
+            rating: 85,
+            synthetic_data_link: Some(synthetic_data_link.to_string()),
         })
         .payer(&agent)
         .send()
@@ -334,14 +360,15 @@ fn test_whole_flow() {
         .expect("Data submission must exists after creation");
     assert_eq!(
         data_submission_content,
-        Datasubmission {
-            version: CURRENT_VERSION,
+        Datasubmission::V2(DataSubmissionV2 {
             data_link: data_link_bytes,
-            agent_response: Some(AgentResponse {
+            agent_response: Some(AgentResponseV2 {
                 agent_key: agent.pubkey(),
-                response: true,
+                is_valid: true,
+                synthetic_data_link: Some(synthetic_data_link_bytes),
                 rating: 85,
                 calculated_credits: 85,
+                is_seed_deleted: true,
             }),
             data_header: DataHeader {
                 primary_category: primary_category_bytes,
@@ -349,7 +376,7 @@ fn test_whole_flow() {
                 reserved: [0u8; DATAHEADER_RESERVED_SIZE],
             },
             user_id: user.pubkey(),
-        }
+        })
     );
 
     let user_config_content: UserConfig = program
@@ -374,9 +401,10 @@ fn test_whole_flow() {
             signer: agent.pubkey(),
         })
         .args(sync_contract::instruction::RateData {
-            data_link: data_link.to_string(),
-            passed: true,
+            _data_link: data_link.to_string(),
+            is_seed_deleted: false,
             rating: 100,
+            synthetic_data_link: None,
         })
         .payer(&agent)
         .send()
@@ -428,8 +456,7 @@ fn test_whole_flow() {
         .expect("Data submission must exists after creation");
     assert_eq!(
         data_submission_content,
-        Datasubmission {
-            version: CURRENT_VERSION,
+        Datasubmission::V2(DataSubmissionV2 {
             data_link: data_link_bytes,
             agent_response: None,
             data_header: DataHeader {
@@ -438,7 +465,7 @@ fn test_whole_flow() {
                 reserved: [0u8; DATAHEADER_RESERVED_SIZE],
             },
             user_id: user.pubkey(),
-        }
+        })
     );
 
     // Agent rates data once again
@@ -451,13 +478,38 @@ fn test_whole_flow() {
             signer: agent.pubkey(),
         })
         .args(sync_contract::instruction::RateData {
-            data_link: data_link.to_string(),
-            passed: true,
+            _data_link: data_link.to_string(),
+            is_seed_deleted: true,
             rating: 82,
+            synthetic_data_link: None,
         })
         .payer(&agent)
         .send()
         .expect("enabled agent must be able to rate some data");
+
+    let data_submission_content: Datasubmission = program
+        .account(data_submission.clone())
+        .expect("Data submission must exists after creation");
+    assert_eq!(
+        data_submission_content,
+        Datasubmission::V2(DataSubmissionV2 {
+            data_link: data_link_bytes,
+            agent_response: Some(AgentResponseV2 {
+                agent_key: agent.pubkey(),
+                is_valid: false,
+                synthetic_data_link: None,
+                rating: 82,
+                calculated_credits: 0,
+                is_seed_deleted: true,
+            }),
+            data_header: DataHeader {
+                primary_category: primary_category_bytes,
+                secondary_category: secondary_category_bytes,
+                reserved: [0u8; DATAHEADER_RESERVED_SIZE],
+            },
+            user_id: user.pubkey(),
+        })
+    );
 
     let user_config_content: UserConfig = program
         .account(user_config_key.clone())
@@ -467,7 +519,121 @@ fn test_whole_flow() {
         user_config_content,
         UserConfig {
             version: 1,
-            accumulated_credits: 167,
+            accumulated_credits: 85,
+            reserved: [0; USER_CONFIG_RESERVED_SIZE],
+        }
+    );
+
+    // Rate data one more time
+    let data_link = "Hello world 2";
+    let mut data_link_bytes = [0u8; DATA_LINK_SIZE];
+    data_link_bytes[0..data_link.as_bytes().len()].copy_from_slice(data_link.as_bytes());
+
+    let primary_category = "Healthcare";
+    let mut primary_category_bytes = [0u8; PRIMARY_CATEGORY_SIZE];
+    primary_category_bytes[0..primary_category.as_bytes().len()]
+        .copy_from_slice(primary_category.as_bytes());
+
+    let secondary_category = "PatientData";
+    let mut secondary_category_bytes = [0u8; SECONDARY_CATEGORY_SIZE];
+    secondary_category_bytes[0..secondary_category.as_bytes().len()]
+        .copy_from_slice(secondary_category.as_bytes());
+
+    let (data_submission, _) = Pubkey::find_program_address(
+        &[
+            b"sync_program".as_ref(),
+            b"data_submission".as_ref(),
+            keccak::hash(data_link.as_bytes()).as_ref(),
+        ],
+        &program.id(),
+    );
+
+    program
+        .request()
+        .accounts(sync_contract::accounts::SubmitData {
+            data_submission,
+            user_config: user_config_key,
+            signer: user.pubkey(),
+            system_program: System::id(),
+        })
+        .args(sync_contract::instruction::SubmitData {
+            data_link: data_link.to_string(),
+            primary_category: primary_category.to_string(),
+            secondary_category: secondary_category.to_string(),
+        })
+        .payer(&user)
+        .send()
+        .expect("user should be able to submit some data");
+
+    let data_submission_content: Datasubmission = program
+        .account(data_submission.clone())
+        .expect("Data submission must exists after creation");
+    assert_eq!(
+        data_submission_content,
+        Datasubmission::V2(DataSubmissionV2 {
+            data_link: data_link_bytes,
+            agent_response: None,
+            data_header: DataHeader {
+                primary_category: primary_category_bytes,
+                secondary_category: secondary_category_bytes,
+                reserved: [0u8; DATAHEADER_RESERVED_SIZE],
+            },
+            user_id: user.pubkey(),
+        })
+    );
+
+    // Agent rates data once again
+    program
+        .request()
+        .accounts(sync_contract::accounts::RateData {
+            data_submission,
+            agent_config,
+            user_config: user_config_key,
+            signer: agent.pubkey(),
+        })
+        .args(sync_contract::instruction::RateData {
+            _data_link: data_link.to_string(),
+            is_seed_deleted: true,
+            rating: 20,
+            synthetic_data_link: Some(synthetic_data_link.to_string()),
+        })
+        .payer(&agent)
+        .send()
+        .expect("enabled agent must be able to rate some data");
+
+    let data_submission_content: Datasubmission = program
+        .account(data_submission.clone())
+        .expect("Data submission must exists after creation");
+    assert_eq!(
+        data_submission_content,
+        Datasubmission::V2(DataSubmissionV2 {
+            data_link: data_link_bytes,
+            agent_response: Some(AgentResponseV2 {
+                agent_key: agent.pubkey(),
+                is_valid: true,
+                synthetic_data_link: Some(synthetic_data_link_bytes),
+                rating: 20,
+                calculated_credits: 20,
+                is_seed_deleted: true,
+            }),
+            data_header: DataHeader {
+                primary_category: primary_category_bytes,
+                secondary_category: secondary_category_bytes,
+                reserved: [0u8; DATAHEADER_RESERVED_SIZE],
+            },
+            user_id: user.pubkey(),
+        })
+    );
+
+    let user_config_content: UserConfig = program
+        .account(user_config_key.clone())
+        .expect("User config must exists after creation");
+
+    assert_eq!(
+        user_config_content,
+        UserConfig {
+            version: 1,
+            accumulated_credits: 105,
             reserved: [0; USER_CONFIG_RESERVED_SIZE],
         }
     );
@@ -520,7 +686,7 @@ fn test_whole_flow() {
 
     assert_eq!(
         token_account_info.unwrap().token_amount.amount,
-        (167 * 10u64.pow(mint_account_contents.decimals as u32)).to_string()
+        (105 * 10u64.pow(mint_account_contents.decimals as u32)).to_string()
     );
 
     // User credit should be 0
@@ -534,39 +700,6 @@ fn test_whole_flow() {
             accumulated_credits: 0,
             reserved: [0; USER_CONFIG_RESERVED_SIZE],
         }
-    );
-
-    // This is for DEMO only
-    // Remove this after demo
-    // Demo claim credits works
-    program
-        .request()
-        .accounts(sync_contract::accounts::DemoClaimCredits {
-            program_state,
-            user_config: user_config_key,
-            mint: mint_account.pubkey(),
-            token_account: associated_token_account,
-            signer: user.pubkey(),
-            system_program: System::id(),
-            token_program: spl_token_2022::id(),
-            associated_token_program: spl_associated_token_account::id(),
-        })
-        .args(sync_contract::instruction::DemoClaimCredits {
-            accumulated_credits: 1000,
-        })
-        .payer(&user)
-        .send()
-        .expect("user should be able to claim demo credits");
-
-    std::thread::sleep(std::time::Duration::from_secs(20));
-
-    let token_account_info = anchor_rpc_client
-        .get_token_account(&associated_token_account)
-        .unwrap();
-
-    assert_eq!(
-        token_account_info.unwrap().token_amount.amount,
-        ((167 + 1000) * 10u64.pow(mint_account_contents.decimals as u32)).to_string()
     );
 
     // Pass the mint authority to the new address can only be done by the admin

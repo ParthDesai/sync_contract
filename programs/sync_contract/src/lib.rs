@@ -1,7 +1,9 @@
+extern crate core;
+
 pub mod types;
 
 use crate::types::{
-    AgentConfig, AgentResponse, DataHeader, Datasubmission, ProgramState, UserConfig,
+    AgentConfig, AgentResponseV1, DataHeader, Datasubmission, ProgramState, UserConfig,
     CURRENT_VERSION, DATAHEADER_RESERVED_SIZE, DATA_LINK_SIZE, PRIMARY_CATEGORY_SIZE,
     SECONDARY_CATEGORY_SIZE, USER_CONFIG_RESERVED_SIZE,
 };
@@ -37,10 +39,12 @@ pub enum SyncError {
     ErrPrimaryCategoryTooLarge,
     #[msg("Secondary category is too large")]
     ErrSecondaryCategoryTooLarge,
+    #[msg("Seed must be deleted before rating")]
+    ErrSeedMustbeDeletedBeforeRating,
 }
 
-pub fn calculate_credits(rating: u8) -> u128 {
-    if rating >= 60 {
+pub fn calculate_credits(rating: u8, is_passed: bool) -> u128 {
+    if is_passed {
         rating as u128
     } else {
         0
@@ -60,6 +64,7 @@ security_txt! {
 #[program]
 pub mod sync_contract {
     use super::*;
+    use crate::types::{AgentResponseV2, DataSubmissionV2};
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         *ctx.accounts.program_state = ProgramState {
@@ -106,7 +111,7 @@ pub mod sync_contract {
         Ok(())
     }
 
-    pub fn allow_agent(ctx: Context<AllowAgent>, agent_key: Pubkey) -> Result<()> {
+    pub fn allow_agent(ctx: Context<AllowAgent>, _agent_key: Pubkey) -> Result<()> {
         ctx.accounts.agent_config.is_enabled = true;
         Ok(())
     }
@@ -148,8 +153,7 @@ pub mod sync_contract {
         secondary_category_bytes[0..secondary_category_string_bytes.len()]
             .copy_from_slice(secondary_category_string_bytes);
 
-        *ctx.accounts.data_submission = Datasubmission {
-            version: CURRENT_VERSION,
+        *ctx.accounts.data_submission = Datasubmission::V2(DataSubmissionV2 {
             data_link: storage_link_bytes,
             agent_response: None,
             data_header: DataHeader {
@@ -158,7 +162,7 @@ pub mod sync_contract {
                 reserved: [0u8; DATAHEADER_RESERVED_SIZE],
             },
             user_id: ctx.accounts.signer.key.clone(),
-        };
+        });
 
         if ctx.accounts.user_config.version != CURRENT_VERSION {
             *ctx.accounts.user_config = UserConfig {
@@ -173,15 +177,16 @@ pub mod sync_contract {
 
     pub fn rate_data(
         ctx: Context<RateData>,
-        data_link: String,
-        passed: bool,
+        _data_link: String,
+        is_seed_deleted: bool,
+        synthetic_data_link: Option<String>,
         rating: u8,
     ) -> Result<()> {
         if !ctx.accounts.agent_config.is_enabled {
             return Err(error!(SyncError::ErrAgentIsNotEnabled));
         }
 
-        if ctx.accounts.data_submission.agent_response.is_some() {
+        if ctx.accounts.data_submission.is_rated() {
             return Err(error!(SyncError::ErrDataAlreadyRated));
         }
 
@@ -189,14 +194,49 @@ pub mod sync_contract {
             return Err(error!(SyncError::ErrInvalidRating));
         }
 
-        let calculated_credits = calculate_credits(rating);
+        if !is_seed_deleted {
+            return Err(error!(SyncError::ErrSeedMustbeDeletedBeforeRating));
+        }
 
-        ctx.accounts.data_submission.agent_response = Some(AgentResponse {
-            agent_key: ctx.accounts.signer.key.clone(),
-            response: passed,
-            rating,
-            calculated_credits,
-        });
+        let calculated_credits = calculate_credits(rating, synthetic_data_link.is_some());
+
+        match &mut *ctx.accounts.data_submission {
+            Datasubmission::V1(data_submission) => {
+                data_submission.agent_response = Some(AgentResponseV1 {
+                    agent_key: ctx.accounts.signer.key.clone(),
+                    response: synthetic_data_link.is_some(),
+                    rating,
+                    calculated_credits,
+                });
+            }
+            Datasubmission::V2(data_submission) => {
+                let synthetic_data_link = match synthetic_data_link {
+                    None => None,
+                    Some(data_link) => {
+                        if !data_link.is_ascii() {
+                            return Err(error!(SyncError::ErrInvalidDataLink));
+                        }
+
+                        let link_bytes = data_link.as_bytes();
+                        let mut storage_link_bytes = [0u8; DATA_LINK_SIZE];
+                        if link_bytes.len() > DATA_LINK_SIZE {
+                            return Err(error!(SyncError::ErrDataLinkTooLarge));
+                        }
+                        storage_link_bytes[0..link_bytes.len()].copy_from_slice(link_bytes);
+                        Some(storage_link_bytes)
+                    }
+                };
+
+                data_submission.agent_response = Some(AgentResponseV2 {
+                    agent_key: ctx.accounts.signer.key.clone(),
+                    is_valid: synthetic_data_link.is_some(),
+                    synthetic_data_link,
+                    is_seed_deleted,
+                    rating,
+                    calculated_credits,
+                });
+            }
+        }
 
         ctx.accounts.user_config.accumulated_credits += calculated_credits;
         Ok(())
@@ -224,32 +264,6 @@ pub mod sync_contract {
         )?;
 
         ctx.accounts.user_config.accumulated_credits = 0;
-
-        Ok(())
-    }
-
-    pub fn demo_claim_credits(
-        ctx: Context<DemoClaimCredits>,
-        accumulated_credits: u64,
-    ) -> Result<()> {
-        let cpi_accounts = MintTo {
-            mint: ctx.accounts.mint.to_account_info(),
-            to: ctx.accounts.token_account.to_account_info(),
-            authority: ctx.accounts.program_state.to_account_info(),
-        };
-
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let signer_seeds = [
-            b"sync_program".as_ref(),
-            b"global_state".as_ref(),
-            &[ctx.bumps.program_state],
-        ];
-        let binding = [signer_seeds.as_ref()];
-        let cpi_context = CpiContext::new(cpi_program, cpi_accounts).with_signer(binding.as_ref());
-        token_interface::mint_to(
-            cpi_context,
-            (accumulated_credits as u64) * 10u64.pow(ctx.accounts.mint.decimals as u32),
-        )?;
 
         Ok(())
     }
@@ -305,7 +319,7 @@ pub struct CreateAgent<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(agent_key: Pubkey)]
+#[instruction(_agent_key: Pubkey)]
 pub struct AllowAgent<'info> {
     #[account(
         seeds = [b"sync_program".as_ref(), b"global_state".as_ref()],
@@ -316,7 +330,7 @@ pub struct AllowAgent<'info> {
     pub signer: Signer<'info>,
     #[account(
         mut,
-        seeds = [b"sync_program".as_ref(), b"agent_config".as_ref(), agent_key.as_ref()],
+        seeds = [b"sync_program".as_ref(), b"agent_config".as_ref(), _agent_key.as_ref()],
         bump,
     )]
     pub agent_config: Account<'info, AgentConfig>,
@@ -347,11 +361,11 @@ pub struct SubmitData<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(data_link: String)]
+#[instruction(_data_link: String)]
 pub struct RateData<'info> {
     #[account(
         mut,
-        seeds = [b"sync_program".as_ref(), b"data_submission".as_ref(), &hash_data_link(&data_link)],
+        seeds = [b"sync_program".as_ref(), b"data_submission".as_ref(), &hash_data_link(&_data_link)],
         bump,
     )]
     pub data_submission: Account<'info, Datasubmission>,
@@ -362,7 +376,7 @@ pub struct RateData<'info> {
     pub agent_config: Account<'info, AgentConfig>,
     #[account(
         mut,
-        seeds = [b"sync_program".as_ref(), b"user_config".as_ref(), data_submission.user_id.as_ref()],
+        seeds = [b"sync_program".as_ref(), b"user_config".as_ref(), data_submission.user_id().as_ref()],
         bump,
     )]
     pub user_config: Account<'info, UserConfig>,
@@ -372,37 +386,6 @@ pub struct RateData<'info> {
 
 #[derive(Accounts)]
 pub struct ClaimCredits<'info> {
-    #[account(
-        seeds = [b"sync_program".as_ref(), b"global_state".as_ref()],
-        bump,
-    )]
-    pub program_state: Account<'info, ProgramState>,
-    #[account(
-        mut,
-        seeds = [b"sync_program".as_ref(), b"user_config".as_ref(), signer.key().as_ref()],
-        bump,
-    )]
-    pub user_config: Account<'info, UserConfig>,
-    #[account(mut)]
-    pub mint: InterfaceAccount<'info, Mint>,
-    #[account(
-        init_if_needed,
-        payer = signer,
-        associated_token::mint = mint,
-        associated_token::authority = signer,
-        associated_token::token_program = token_program,
-    )]
-    pub token_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut)]
-    pub signer: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-    pub token_program: Interface<'info, TokenInterface>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-}
-
-#[derive(Accounts)]
-pub struct DemoClaimCredits<'info> {
     #[account(
         seeds = [b"sync_program".as_ref(), b"global_state".as_ref()],
         bump,

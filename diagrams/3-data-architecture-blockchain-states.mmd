@@ -1,0 +1,87 @@
+graph TB
+    subgraph "🏆 BLOCKCHAIN SOURCE OF TRUTH - CONDITIONAL USER CONFIG"
+        subgraph "Program State PDA"
+            PS["👑 ProgramState<br/>• version: u8<br/>• admin: Pubkey<br/>🏆 Program Authority"]
+        end
+        
+        subgraph "User Account PDAs - CONDITIONAL LIFECYCLE"
+            UC1["👤 NEW USER - SubmitData<br/>• version: u8<br/>• accumulatedCredits: 0<br/>🆕 FIRST TIME INITIALIZATION<br/>✅ Account created from scratch"]
+            UC2["👤 EXISTING USER - SubmitData<br/>• version: u8<br/>• accumulatedCredits: unchanged<br/>🔄 PRESERVED EXISTING BALANCE<br/>✅ Could be 0 or accumulated amount"]
+            UC3["👤 AFTER RATEDATA - Any User<br/>• version: u8<br/>• accumulatedCredits: previous + calculated<br/>💰 CREDITS ACCUMULATED<br/>✅ Added to existing balance"]
+            UC4["👤 AFTER CLAIMCREDITS - Any User<br/>• version: u8<br/>• accumulatedCredits: 0<br/>🔄 CREDITS RESET<br/>✅ Tokens minted to wallet"]
+        end
+        
+        subgraph "Data Submission PDAs" 
+            DS1["📄 DataSubmission - After SubmitData<br/>• version: u8<br/>• dataLink: String<br/>• seedFileHash: String<br/>• userId: Pubkey<br/>• dataHeader: Object<br/>• agentResponse: None<br/>✅ Waiting for rating<br/>💡 Same for new/existing users"]
+            DS2["📄 DataSubmission - After RateData<br/>• version: u8<br/>• dataLink: String<br/>• seedFileHash: String<br/>• userId: Pubkey<br/>• dataHeader: Object<br/>• agentResponse: Some AgentResponse<br/>✅ Rating completed"]
+        end
+        
+        subgraph "Agent Config PDAs"
+            AC["🤖 AgentConfig<br/>• version: u8<br/>• isEnabled: bool<br/>🏆 Agent Authority"]
+        end
+        
+        subgraph "Agent Response within DataSubmission"
+            AR["⭐ AgentResponse - Created in RateData<br/>• agentKey: Pubkey<br/>• response: bool<br/>• rating: u8 0-100<br/>• syntheticFileHash: Option String<br/>• calculatedCredits: u64<br/>🏆 CREDITS TO ADD<br/>💰 ALWAYS ADDITIVE<br/>📁 FILE STORAGE REFERENCES"]
+        end
+        
+        subgraph "Token Accounts"
+            TOKEN["🪙 SPL Token Account<br/>• User wallet balance<br/>• Minted from claimed credits<br/>🏆 TOKENIZED REWARDS"]
+        end
+    end
+
+    subgraph "💾 OFF-CHAIN SYSTEMS & STORAGE"
+        subgraph "Backend Database - Cache Only"
+            DB["🗄️ Database<br/>• seed_id → file_hash mappings<br/>• file metadata cache<br/>• performance optimization<br/>❌ NOT authoritative"]
+        end
+        
+        subgraph "File Storage Platform - File Lifecycle"
+            FS1["📁 File Storage - During Processing<br/>• Original seed files (temporary)<br/>• Content-addressed storage<br/>• Decentralized & immutable<br/>✅ File storage authority"]
+            FS2["🗑️ File Storage - After Rating<br/>• Original seed files DELETED<br/>• Synthetic files preserved<br/>• Cleanup after processing<br/>🧹 Storage optimization"]
+            FS3["📁 File Storage - Long-term Storage<br/>• Synthetic data files only<br/>• Referenced in AgentResponse<br/>• Permanent decentralized storage<br/>✅ Persistent valuable data"]
+        end
+    end
+
+    %% Conditional Flow Relationships
+    UC1 -->|"⭐ RateData TX"| UC3
+    UC2 -->|"⭐ RateData TX"| UC3
+    UC3 -->|"💳 ClaimCredits TX"| UC4
+    UC4 -->|"📝 Next SubmitData - existing user"| UC2
+    
+    DS1 -->|"⭐ RateData TX"| DS2
+    DS2 --> AR
+    AR -->|"💰 Credit Addition"| UC3
+    UC3 -->|"🪙 Claim Process"| TOKEN
+    
+    %% File Storage Lifecycle
+    FS1 -->|"After rating & synthetic generation"| FS2
+    FS2 -->|"Synthetic files preserved"| FS3
+    
+    %% Cache Relationships - One-way from source of truth
+    UC3 -.->|"📥 Cache user stats"| DB
+    DS2 -.->|"📥 Cache submission data"| DB
+    AR -.->|"📥 Cache rating data"| DB
+    FS1 -.->|"📥 Cache seed file mappings"| DB
+    FS3 -.->|"📥 Cache synthetic file mappings"| DB
+    
+    %% Visual Styling with High Contrast
+    classDef onchain fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#FFFFFF
+    classDef offchain fill:#757575,stroke:#212121,stroke-width:2px,color:#FFFFFF
+    classDef fileStorageActive fill:#2196F3,stroke:#0D47A1,stroke-width:3px,color:#FFFFFF
+    classDef fileStorageDeleted fill:#FF5722,stroke:#D84315,stroke-width:3px,color:#FFFFFF
+    classDef fileStoragePreserved fill:#009688,stroke:#004D40,stroke-width:3px,color:#FFFFFF
+    classDef newUser fill:#8BC34A,stroke:#33691E,stroke-width:3px,color:#000000
+    classDef existingUser fill:#03A9F4,stroke:#01579B,stroke-width:3px,color:#FFFFFF
+    classDef creditsAccumulated fill:#FFC107,stroke:#FF8F00,stroke-width:3px,color:#000000
+    classDef creditsReset fill:#F44336,stroke:#B71C1C,stroke-width:3px,color:#FFFFFF
+    classDef tokens fill:#9C27B0,stroke:#4A148C,stroke-width:3px,color:#FFFFFF
+    
+    class PS,DS1,DS2,AC,AR onchain
+    class DB offchain
+    class FS1 fileStorageActive
+    class FS2 fileStorageDeleted
+    class FS3 fileStoragePreserved
+    class UC1 newUser
+    class UC2 existingUser
+    class UC3 creditsAccumulated
+    class UC4 creditsReset
+    class TOKEN tokens

@@ -7,6 +7,10 @@ import { Program } from "@coral-xyz/anchor";
 import { SyncContract } from "../target/types/sync_contract";
 import bs58 from "bs58";
 
+// Import migration functions
+const runMintAuthorityTransfer = require('./transfer_mint_authority');
+const runDemoClaimCredits = require('./claim_demo_credits');
+
 // Function to get deployment mode from environment variable
 function getDeploymentMode(): string {
   const mode = process.env.DEPLOY_MODE;
@@ -17,17 +21,19 @@ function getDeploymentMode(): string {
     console.log("Usage:");
     console.log("  DEPLOY_MODE=normal anchor deploy                    # Normal deployment");
     console.log("  DEPLOY_MODE=mint_authority_transfer anchor deploy   # Mint authority transfer");
+    console.log("  DEPLOY_MODE=demo_claim_credits anchor deploy        # Demo claim credits");
     console.log("");
     process.exit(1);
   }
   
-  if (mode !== 'normal' && mode !== 'mint_authority_transfer') {
+  if (mode !== 'normal' && mode !== 'mint_authority_transfer' && mode !== 'demo_claim_credits') {
     console.log("❌ Error: Invalid DEPLOY_MODE specified");
     console.log(`   Received: ${mode}`);
     console.log("");
     console.log("Valid modes:");
     console.log("  DEPLOY_MODE=normal                    # Normal deployment");
     console.log("  DEPLOY_MODE=mint_authority_transfer   # Mint authority transfer");
+    console.log("  DEPLOY_MODE=demo_claim_credits        # Demo claim credits");
     console.log("");
     process.exit(1);
   }
@@ -172,14 +178,12 @@ async function normalDeployment(provider: anchor.AnchorProvider, program: Progra
   console.log("🎉 Normal deployment completed successfully!");
 }
 
-// Import and run mint authority transfer
-async function runMintAuthorityTransfer(provider: anchor.AnchorProvider, program: Program<SyncContract>) {
+// Wrapper function for mint authority transfer
+async function runMintAuthorityTransferWrapper(provider: anchor.AnchorProvider, program: Program<SyncContract>) {
   console.log("\n🔄 Starting mint authority transfer...");
   
   try {
-    // Import the transfer mint authority module
-    const transferMintAuthority = require('./transfer_mint_authority');
-    await transferMintAuthority(provider);
+    await runMintAuthorityTransfer(provider, program);
     console.log("✅ Mint authority transfer completed successfully!");
   } catch (error) {
     console.error("❌ Error during mint authority transfer:", error);
@@ -205,7 +209,10 @@ module.exports = async function (provider: anchor.AnchorProvider) {
         await normalDeployment(provider, program);
         break;
       case 'mint_authority_transfer':
-        await runMintAuthorityTransfer(provider, program);
+        await runMintAuthorityTransferWrapper(provider, program);
+        break;
+      case 'demo_claim_credits':
+        await runDemoClaimCredits(provider, program);
         break;
       default:
         console.log("❌ Invalid mode. This should not happen.");

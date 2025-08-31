@@ -1,0 +1,82 @@
+flowchart TD
+    %% User and Frontend Flow
+    A["👤 User"] -->|"1\. Upload Seed File"| B["🌐 Frontend"]
+    B -->|"2\. Send File"| C["🔧 Backend API"]
+    
+    %% Backend Processing (Non-Critical Data)
+    C -->|"3\. Preliminary Check"| D{"📋 File Valid?"}
+    D -->|"❌ Invalid"| E["⚠️ Return Error"]
+    D -->|"✅ Valid"| F["📁 Upload to File Storage<br/>🆔 Generate seed_id<br/>💾 Cache file_hash + metadata"]
+    
+    %% Response to Frontend
+    F -->|"4\. Return seed_id + file_hash"| B
+    E -->|"Error Message"| B
+    
+    %% BLOCKCHAIN SOURCE OF TRUTH STARTS HERE
+    B -->|"5\. Display seed_id"| A
+    A -->|"6\. Approve Transaction"| G["📝 SubmitData TX"]
+    G -->|"7\. seed_id + metadata"| H["⛓️ Smart Contract<br/>🏆 SOURCE OF TRUTH"]
+    
+    %% On-Chain Data Storage (Critical)
+    H -->|"8\. Store DataSubmission"| I["💾 DataSubmission Created<br/>✅ Authoritative Record"]
+    H -->|"9\. Check UserConfig"| J{"👤 UserConfig Exists?"}
+    
+    %% Conditional UserConfig Handling
+    J -->|"❌ No"| K["✅ Initialize UserConfig<br/>accumulatedCredits = 0<br/>🆕 NEW USER SETUP"]
+    J -->|"✅ Yes"| L["✅ UserConfig Unchanged<br/>Keep existing credits<br/>🔄 EXISTING USER"]
+    
+    %% Continue Flow
+    K -->|"10a\. Event Emitted"| M["📡 DataSubmitted Event"]
+    L -->|"10b\. Event Emitted"| M
+    
+    %% Agent Detection and Processing
+    M -->|"11\. Detect Event"| N["🤖 AI Agent Backend"]
+    N -->|"12\. Fetch from File Storage by hash"| O["📊 Rate Seed File<br/>💾 Cache analysis only"]
+    O -->|"13\. Generate Rating 0-100"| P{"⚖️ Rating >= 60?"}
+    
+    %% Conditional Synthetic Data Generation
+    P -->|"❌ Rating < 60"| Q["📄 No Synthetic File<br/>💾 Cache result only"]
+    P -->|"✅ Rating >= 60"| R["🧬 Generate Synthetic Data<br/>📁 Upload to File Storage Platform"]
+    R -->|"Synthetic File Created"| S["📁 synthetic_file_hash<br/>💾 Cache File Storage reference"]
+    
+    %% CRITICAL: Rating Storage On-Chain WITH CREDITS
+    Q -->|"14a\. Rating Only"| T["📊 Prepare RateData TX<br/>🏆 TO BLOCKCHAIN"]
+    S -->|"14b\. Rating + synthetic_file_hash"| T
+    T -->|"15\. Delete Seed File"| T1["🗑️ Delete Seed File from File Storage<br/>💾 Cleanup Original File"]
+    T1 -->|"16\. Submit to Contract"| U["⛓️ RateData TX<br/>🏆 SOURCE OF TRUTH"]
+    
+    %% Smart Contract Credit Calculation (Authoritative)
+    U -->|"17\. Store AgentResponse"| V["💾 On-Chain Rating Record<br/>✅ Immutable & Auditable"]
+    U -->|"18\. Calculate Credits"| W["🧮 Credit Calculation<br/>✅ Deterministic On-Chain"]
+    W -->|"19\. Update UserConfig"| X["➕ Add Credits to Existing<br/>✅ Credits += calculated<br/>🏆 Authoritative Balance"]
+    
+    %% Final State Updates (Blockchain Authority)
+    X -->|"20\. Credits Available"| Y["👤 User Account<br/>🏆 Updated Blockchain Balance"]
+    Y -->|"21\. Query On-Chain"| Z["💳 Claim Credits<br/>✅ Based on Chain State"]
+    
+    %% Important Flow Notes
+    AA["📝 SubmitData Behavior<br/>🆕 New User: Initialize credits = 0<br/>🔄 Existing User: Keep current credits<br/>✅ Always creates DataSubmission<br/>💡 Conditional UserConfig handling"]
+    BB["⭐ RateData Behavior<br/>✅ Always adds credits<br/>✅ Credits += calculated amount<br/>✅ Never resets existing credits<br/>💰 Accumulative credit system"]
+    
+    %% Visual Styling with High Contrast
+    classDef userAction fill:#2196F3,stroke:#0D47A1,stroke-width:3px,color:#FFFFFF
+    classDef backend fill:#9C27B0,stroke:#4A148C,stroke-width:3px,color:#FFFFFF
+    classDef smartContract fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#FFFFFF
+    classDef agent fill:#FF9800,stroke:#E65100,stroke-width:3px,color:#000000
+    classDef decision fill:#FFEB3B,stroke:#F57F17,stroke-width:3px,color:#000000
+    classDef cache fill:#9E9E9E,stroke:#424242,stroke-width:2px,color:#FFFFFF
+    classDef newUser fill:#8BC34A,stroke:#33691E,stroke-width:3px,color:#000000
+    classDef existingUser fill:#03A9F4,stroke:#01579B,stroke-width:3px,color:#FFFFFF
+    classDef creditsAwarded fill:#4CAF50,stroke:#1B5E20,stroke-width:4px,color:#FFFFFF
+    classDef important fill:#FFC107,stroke:#F57C00,stroke-width:3px,color:#000000
+    
+    class A,B,G,Z userAction
+    class C,F,N,O,R,S backend
+    class H,I,U,V,X,Y smartContract
+    class M,T,T1 agent
+    class D,J,P decision
+    class E,Q cache
+    class K newUser
+    class L existingUser
+    class W,X creditsAwarded
+    class AA,BB important
