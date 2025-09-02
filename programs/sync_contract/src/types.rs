@@ -1,5 +1,6 @@
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::prelude::*;
+#[cfg(feature = "idl-build")]
 use std::fmt;
 
 pub const CURRENT_VERSION: u8 = 1;
@@ -294,6 +295,13 @@ impl Datasubmission {
         match self {
             Datasubmission::V1(data_submission) => data_submission.user_id,
             Datasubmission::V2(data_submission) => data_submission.user_id,
+        }
+    }
+
+    pub fn data_link(&self) -> [u8; DATA_LINK_SIZE] {
+        match self {
+            Datasubmission::V1(data_submission) => data_submission.data_link,
+            Datasubmission::V2(data_submission) => data_submission.data_link,
         }
     }
 }
