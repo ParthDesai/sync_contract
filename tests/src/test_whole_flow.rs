@@ -274,6 +274,13 @@ fn test_whole_flow() {
         })
     );
 
+    let associated_token_account =
+        spl_associated_token_account::get_associated_token_address_with_program_id(
+            &user.pubkey(),
+            &mint_account.pubkey(),
+            &spl_token_2022::id(),
+        );
+
     // Agent cannot rate it without being enabled
     program
         .request()
@@ -282,12 +289,21 @@ fn test_whole_flow() {
             agent_config,
             user_config: user_config_key,
             signer: agent.pubkey(),
+
+            program_state,
+            mint: mint_account.pubkey(),
+            user_account: user.pubkey(),
+            token_account: associated_token_account,
+            system_program: System::id(),
+            token_program: spl_token_2022::id(),
+            associated_token_program: spl_associated_token_account::id(),
         })
         .args(sync_contract::instruction::RateData {
             _data_link: data_link.to_string(),
             is_seed_deleted: true,
             rating: 100,
             synthetic_data_link: None,
+            send_tokens_immediately: false,
         })
         .payer(&agent)
         .send()
@@ -325,12 +341,21 @@ fn test_whole_flow() {
             agent_config,
             user_config: user_config_key,
             signer: agent.pubkey(),
+
+            program_state,
+            user_account: user.pubkey(),
+            mint: mint_account.pubkey(),
+            token_account: associated_token_account,
+            system_program: System::id(),
+            token_program: spl_token_2022::id(),
+            associated_token_program: spl_associated_token_account::id(),
         })
         .args(sync_contract::instruction::RateData {
             _data_link: data_link.to_string(),
             is_seed_deleted: false,
             rating: 85,
             synthetic_data_link: Some(synthetic_data_link.to_string()),
+            send_tokens_immediately: false,
         })
         .payer(&agent)
         .send()
@@ -344,12 +369,21 @@ fn test_whole_flow() {
             agent_config,
             user_config: user_config_key,
             signer: agent.pubkey(),
+
+            program_state,
+            mint: mint_account.pubkey(),
+            user_account: user.pubkey(),
+            token_account: associated_token_account,
+            system_program: System::id(),
+            token_program: spl_token_2022::id(),
+            associated_token_program: spl_associated_token_account::id(),
         })
         .args(sync_contract::instruction::RateData {
             _data_link: data_link.to_string(),
             is_seed_deleted: true,
             rating: 85,
             synthetic_data_link: Some(synthetic_data_link.to_string()),
+            send_tokens_immediately: false,
         })
         .payer(&agent)
         .send()
@@ -399,18 +433,27 @@ fn test_whole_flow() {
             agent_config,
             user_config: user_config_key,
             signer: agent.pubkey(),
+
+            program_state,
+            user_account: user.pubkey(),
+            mint: mint_account.pubkey(),
+            token_account: associated_token_account,
+            system_program: System::id(),
+            token_program: spl_token_2022::id(),
+            associated_token_program: spl_associated_token_account::id(),
         })
         .args(sync_contract::instruction::RateData {
             _data_link: data_link.to_string(),
             is_seed_deleted: false,
             rating: 100,
             synthetic_data_link: None,
+            send_tokens_immediately: false,
         })
         .payer(&agent)
         .send()
         .expect_err("enabled agent cannot rate data again");
 
-    // We create another data link
+    // We rate data second time to check pass condition
     let data_link = "Hello world 1";
     let mut data_link_bytes = [0u8; DATA_LINK_SIZE];
     data_link_bytes[0..data_link.as_bytes().len()].copy_from_slice(data_link.as_bytes());
@@ -476,12 +519,21 @@ fn test_whole_flow() {
             agent_config,
             user_config: user_config_key,
             signer: agent.pubkey(),
+
+            program_state,
+            user_account: user.pubkey(),
+            mint: mint_account.pubkey(),
+            token_account: associated_token_account,
+            system_program: System::id(),
+            token_program: spl_token_2022::id(),
+            associated_token_program: spl_associated_token_account::id(),
         })
         .args(sync_contract::instruction::RateData {
             _data_link: data_link.to_string(),
             is_seed_deleted: true,
             rating: 82,
             synthetic_data_link: None,
+            send_tokens_immediately: false,
         })
         .payer(&agent)
         .send()
@@ -524,7 +576,7 @@ fn test_whole_flow() {
         }
     );
 
-    // Rate data one more time
+    // Rate data third time to check pass condition, second scenario
     let data_link = "Hello world 2";
     let mut data_link_bytes = [0u8; DATA_LINK_SIZE];
     data_link_bytes[0..data_link.as_bytes().len()].copy_from_slice(data_link.as_bytes());
@@ -590,12 +642,21 @@ fn test_whole_flow() {
             agent_config,
             user_config: user_config_key,
             signer: agent.pubkey(),
+
+            program_state,
+            user_account: user.pubkey(),
+            mint: mint_account.pubkey(),
+            token_account: associated_token_account,
+            system_program: System::id(),
+            token_program: spl_token_2022::id(),
+            associated_token_program: spl_associated_token_account::id(),
         })
         .args(sync_contract::instruction::RateData {
             _data_link: data_link.to_string(),
             is_seed_deleted: true,
             rating: 20,
             synthetic_data_link: Some(synthetic_data_link.to_string()),
+            send_tokens_immediately: false,
         })
         .payer(&agent)
         .send()
@@ -638,12 +699,143 @@ fn test_whole_flow() {
         }
     );
 
-    let associated_token_account =
-        spl_associated_token_account::get_associated_token_address_with_program_id(
-            &user.pubkey(),
-            &mint_account.pubkey(),
-            &spl_token_2022::id(),
-        );
+    // We rate data fourth time, to check if redeem tokens immediately works or not
+    let data_link = "Hello world 3";
+    let mut data_link_bytes = [0u8; DATA_LINK_SIZE];
+    data_link_bytes[0..data_link.as_bytes().len()].copy_from_slice(data_link.as_bytes());
+
+    let primary_category = "Healthcare";
+    let mut primary_category_bytes = [0u8; PRIMARY_CATEGORY_SIZE];
+    primary_category_bytes[0..primary_category.as_bytes().len()]
+        .copy_from_slice(primary_category.as_bytes());
+
+    let secondary_category = "PatientData";
+    let mut secondary_category_bytes = [0u8; SECONDARY_CATEGORY_SIZE];
+    secondary_category_bytes[0..secondary_category.as_bytes().len()]
+        .copy_from_slice(secondary_category.as_bytes());
+
+    let (data_submission, _) = Pubkey::find_program_address(
+        &[
+            b"sync_program".as_ref(),
+            b"data_submission".as_ref(),
+            keccak::hash(data_link.as_bytes()).as_ref(),
+        ],
+        &program.id(),
+    );
+
+    program
+        .request()
+        .accounts(sync_contract::accounts::SubmitData {
+            data_submission,
+            user_config: user_config_key,
+            signer: user.pubkey(),
+            system_program: System::id(),
+        })
+        .args(sync_contract::instruction::SubmitData {
+            data_link: data_link.to_string(),
+            primary_category: primary_category.to_string(),
+            secondary_category: secondary_category.to_string(),
+        })
+        .payer(&user)
+        .send()
+        .expect("user should be able to submit some data");
+
+    let data_submission_content: Datasubmission = program
+        .account(data_submission.clone())
+        .expect("Data submission must exists after creation");
+    assert_eq!(
+        data_submission_content,
+        Datasubmission::V2(DataSubmissionV2 {
+            data_link: data_link_bytes,
+            agent_response: None,
+            data_header: DataHeader {
+                primary_category: primary_category_bytes,
+                secondary_category: secondary_category_bytes,
+                reserved: [0u8; DATAHEADER_RESERVED_SIZE],
+            },
+            user_id: user.pubkey(),
+        })
+    );
+
+    // Agent rates data once again
+    program
+        .request()
+        .accounts(sync_contract::accounts::RateData {
+            data_submission,
+            agent_config,
+            user_config: user_config_key,
+            signer: agent.pubkey(),
+
+            program_state,
+            user_account: user.pubkey(),
+            mint: mint_account.pubkey(),
+            token_account: associated_token_account,
+            system_program: System::id(),
+            token_program: spl_token_2022::id(),
+            associated_token_program: spl_associated_token_account::id(),
+        })
+        .args(sync_contract::instruction::RateData {
+            _data_link: data_link.to_string(),
+            is_seed_deleted: true,
+            rating: 57,
+            synthetic_data_link: Some(synthetic_data_link.to_string()),
+            send_tokens_immediately: true,
+        })
+        .payer(&agent)
+        .send()
+        .expect("enabled agent must be able to rate some data");
+
+    let data_submission_content: Datasubmission = program
+        .account(data_submission.clone())
+        .expect("Data submission must exists after creation");
+    assert_eq!(
+        data_submission_content,
+        Datasubmission::V2(DataSubmissionV2 {
+            data_link: data_link_bytes,
+            agent_response: Some(AgentResponseV2 {
+                agent_key: agent.pubkey(),
+                is_valid: true,
+                synthetic_data_link: Some(synthetic_data_link_bytes),
+                rating: 57,
+                calculated_credits: 57,
+                is_seed_deleted: true,
+            }),
+            data_header: DataHeader {
+                primary_category: primary_category_bytes,
+                secondary_category: secondary_category_bytes,
+                reserved: [0u8; DATAHEADER_RESERVED_SIZE],
+            },
+            user_id: user.pubkey(),
+        })
+    );
+
+    std::thread::sleep(std::time::Duration::from_secs(20));
+
+    let user_config_content: UserConfig = program
+        .account(user_config_key.clone())
+        .expect("User config must exists after creation");
+
+    // User accumulated credit will not be changed since we decided to get credit immediately
+    assert_eq!(
+        user_config_content,
+        UserConfig {
+            version: 1,
+            accumulated_credits: 105,
+            reserved: [0; USER_CONFIG_RESERVED_SIZE],
+        }
+    );
+
+    let token_account_info = anchor_rpc_client
+        .get_token_account(&associated_token_account)
+        .unwrap();
+
+    let mint_account_contents =
+        fetch_mint_account(&anchor_rpc_client, &mint_account.pubkey()).unwrap();
+
+    assert_eq!(
+        token_account_info.unwrap().token_amount.amount,
+        (57 * 10u64.pow(mint_account_contents.decimals as u32)).to_string()
+    );
 
     println!("Program state: {}", program_state);
     println!("User config: {}", user_config_key);
@@ -686,7 +878,7 @@ fn test_whole_flow() {
 
     assert_eq!(
         token_account_info.unwrap().token_amount.amount,
-        (105 * 10u64.pow(mint_account_contents.decimals as u32)).to_string()
+        ((57 + 105) * 10u64.pow(mint_account_contents.decimals as u32)).to_string()
     );
 
     // User credit should be 0

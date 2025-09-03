@@ -181,6 +181,7 @@ pub mod sync_contract {
         is_seed_deleted: bool,
         synthetic_data_link: Option<String>,
         rating: u8,
+        send_tokens_immediately: bool,
     ) -> Result<()> {
         if !ctx.accounts.agent_config.is_enabled {
             return Err(error!(SyncError::ErrAgentIsNotEnabled));
@@ -238,7 +239,28 @@ pub mod sync_contract {
             }
         }
 
-        ctx.accounts.user_config.accumulated_credits += calculated_credits;
+        if !send_tokens_immediately {
+            ctx.accounts.user_config.accumulated_credits += calculated_credits;
+        } else {
+            let cpi_accounts = MintTo {
+                mint: ctx.accounts.mint.to_account_info(),
+                to: ctx.accounts.token_account.to_account_info(),
+                authority: ctx.accounts.program_state.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            let signer_seeds = [
+                b"sync_program".as_ref(),
+                b"global_state".as_ref(),
+                &[ctx.bumps.program_state],
+            ];
+            let binding = [signer_seeds.as_ref()];
+            let cpi_context =
+                CpiContext::new(cpi_program, cpi_accounts).with_signer(binding.as_ref());
+            token_interface::mint_to(
+                cpi_context,
+                (calculated_credits as u64) * 10u64.pow(ctx.accounts.mint.decimals as u32),
+            )?;
+        }
         Ok(())
     }
 
@@ -382,6 +404,26 @@ pub struct RateData<'info> {
     pub user_config: Account<'info, UserConfig>,
     #[account(mut)]
     pub signer: Signer<'info>,
+    #[account(
+        seeds = [b"sync_program".as_ref(), b"global_state".as_ref()],
+        bump,
+    )]
+    pub program_state: Account<'info, ProgramState>,
+    #[account(mut)]
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        init_if_needed,
+        payer = signer,
+        associated_token::mint = mint,
+        associated_token::authority = user_account,
+        associated_token::token_program = token_program,
+    )]
+    pub token_account: InterfaceAccount<'info, TokenAccount>,
+    #[account(address = data_submission.user_id())]
+    pub user_account: SystemAccount<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 #[derive(Accounts)]
