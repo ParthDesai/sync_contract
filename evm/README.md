@@ -63,4 +63,18 @@ export DEPLOYER_PRIVATE_KEY="0x..."
 npx hardhat run scripts/deploy.ts --network base
 ```
 
+## Transfer admin
+
+The `SyncContract` stores an `admin` address in contract storage. You can transfer it via `transferAdmin`.
+
+```bash
+cd evm
+export BASE_SEPOLIA_RPC_URL="https://..."
+export DEPLOYER_PRIVATE_KEY="0x..."          # must be current admin
+export SYNC_CONTRACT_PROXY="0x..."
+export NEW_ADMIN="0x..."
+
+npx hardhat run scripts/transferAdmin.ts --network baseSepolia
+```
+
 

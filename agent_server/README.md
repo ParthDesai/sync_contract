@@ -88,6 +88,19 @@ Response:
 Notes:
 - `rating` is optional. If omitted, the agent still marks `isValid`, but no credits are granted unless a rating is provided.
 
+### `GET /users/:user/submissions?start=&limit=`
+
+Read-only query for a user’s submissions (paginated). Anyone can call it.
+
+- `start` (optional): default `0`
+- `limit` (optional): default `50`, max `200`
+
+Example:
+
+```bash
+curl -sS "http://127.0.0.1:8080/users/0x1111111111111111111111111111111111111111/submissions?start=0&limit=10"
+```
+
 ## Install / Build / Run
 
 Per repo rule, this folder includes a `Cargo.toml.template`. Copy it to `Cargo.toml` locally.

@@ -22,8 +22,8 @@ async function main() {
   const deployerAddr = await deployer.getAddress();
 
   const admin = envOr("SYNC_ADMIN", deployerAddr)!;
-  const tokenName = envOr("TOKEN_NAME", "Syncora Credit")!;
-  const tokenSymbol = envOr("TOKEN_SYMBOL", "SYNCRED")!;
+  const tokenName = envOr("TOKEN_NAME", "Strova Credits")!;
+  const tokenSymbol = envOr("TOKEN_SYMBOL", "Strova")!;
   const tokenDecimals = Number(envOr("TOKEN_DECIMALS", "9")!);
 
   if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 255) {
@@ -37,7 +37,7 @@ async function main() {
   console.log(`admin=${admin}`);
 
   // 1) Deploy ERC20 token with deployer as initial mint authority (then transfer to proxy).
-  const Token = await ethers.getContractFactory("SyncoraCreditToken");
+  const Token = await ethers.getContractFactory("StrovaCreditToken");
   const token = await Token.deploy(tokenName, tokenSymbol, tokenDecimals, deployerAddr);
   await token.waitForDeployment();
   const tokenAddr = await token.getAddress();

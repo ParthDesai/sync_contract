@@ -3,7 +3,7 @@ use agent_server::eth::EthApi;
 use agent_server::build_router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use ethers::types::{Address, TxHash};
+use ethers::types::{Address, TxHash, U256};
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
@@ -44,6 +44,31 @@ impl EthApi for MockEth {
 
     async fn create_agent(&self) -> anyhow::Result<TxHash> {
         Ok(self.tx)
+    }
+
+    async fn user_submission_count(&self, _user: Address) -> anyhow::Result<U256> {
+        Ok(U256::from(3u64))
+    }
+
+    async fn user_submission_summaries(
+        &self,
+        _user: Address,
+        _start: U256,
+        _limit: U256,
+    ) -> anyhow::Result<Vec<agent_server::eth::sync_contract::GetUserSubmissionSummariesReturn0>> {
+        Ok(vec![agent_server::eth::sync_contract::GetUserSubmissionSummariesReturn0 {
+            data_key: [0xAAu8; 32],
+            user: Address::repeat_byte(0x11),
+            timestamp: U256::from(123u64),
+            data_link: "ipfs://bafy".to_string(),
+            domain: "ipfs".to_string(),
+            data_type: "image".to_string(),
+            data_format: "png".to_string(),
+            file_size_in_k_b: U256::from(10u64),
+            primary_category: [0u8; 32],
+            secondary_category: [0u8; 32],
+            is_rated: false,
+        }])
     }
 
     async fn rate(
@@ -212,6 +237,32 @@ async fn rate_forwards_synthetic_link_and_flags() {
             send_tokens_immediately: true,
         }
     );
+}
+
+#[tokio::test]
+async fn user_submissions_endpoint_returns_items() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let mock = MockEth {
+        agent: Address::repeat_byte(0x44),
+        calls,
+        key: [0xAB; 32],
+        tx: TxHash::from([0xCD; 32]),
+    };
+
+    let app = build_router(AppState { eth: Arc::new(mock) });
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/users/0x1111111111111111111111111111111111111111/submissions?start=0&limit=2")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    let (status, body) = json_response(res).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["total"].as_str().unwrap(), "3");
+    assert_eq!(body["items"].as_array().unwrap().len(), 1);
+    assert_eq!(body["items"][0]["domain"].as_str().unwrap(), "ipfs");
 }
 
 

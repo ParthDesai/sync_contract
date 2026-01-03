@@ -104,6 +104,46 @@ export declare namespace SyncContract {
     isRated: boolean;
     response: SyncContract.AgentResponseStructOutput;
   };
+
+  export type SubmissionSummaryStruct = {
+    dataKey: BytesLike;
+    user: AddressLike;
+    timestamp: BigNumberish;
+    dataLink: string;
+    domain: string;
+    dataType: string;
+    dataFormat: string;
+    fileSizeInKB: BigNumberish;
+    primaryCategory: BytesLike;
+    secondaryCategory: BytesLike;
+    isRated: boolean;
+  };
+
+  export type SubmissionSummaryStructOutput = [
+    dataKey: string,
+    user: string,
+    timestamp: bigint,
+    dataLink: string,
+    domain: string,
+    dataType: string,
+    dataFormat: string,
+    fileSizeInKB: bigint,
+    primaryCategory: string,
+    secondaryCategory: string,
+    isRated: boolean
+  ] & {
+    dataKey: string;
+    user: string;
+    timestamp: bigint;
+    dataLink: string;
+    domain: string;
+    dataType: string;
+    dataFormat: string;
+    fileSizeInKB: bigint;
+    primaryCategory: string;
+    secondaryCategory: string;
+    isRated: boolean;
+  };
 }
 
 export interface SyncContractInterface extends Interface {
@@ -122,16 +162,22 @@ export interface SyncContractInterface extends Interface {
       | "creditToken"
       | "getSubmission"
       | "getSubmissionKey"
+      | "getUserSubmissionKeyAt"
+      | "getUserSubmissionKeys"
+      | "getUserSubmissionSummaries"
       | "initialize"
       | "proxiableUUID"
       | "rateData"
       | "submitData"
+      | "transferAdmin"
       | "transferMintAuthority"
       | "upgradeToAndCall"
+      | "userSubmissionCount"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "AdminTransferred"
       | "AgentAllowed"
       | "AgentCreated"
       | "CreditsClaimed"
@@ -193,6 +239,18 @@ export interface SyncContractInterface extends Interface {
     values: [string]
   ): string;
   encodeFunctionData(
+    functionFragment: "getUserSubmissionKeyAt",
+    values: [AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getUserSubmissionKeys",
+    values: [AddressLike, BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getUserSubmissionSummaries",
+    values: [AddressLike, BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "initialize",
     values: [AddressLike, AddressLike]
   ): string;
@@ -218,12 +276,20 @@ export interface SyncContractInterface extends Interface {
     values: [string, string, string, string, string, string, BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "transferAdmin",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "transferMintAuthority",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "upgradeToAndCall",
     values: [AddressLike, BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "userSubmissionCount",
+    values: [AddressLike]
   ): string;
 
   decodeFunctionResult(
@@ -272,6 +338,18 @@ export interface SyncContractInterface extends Interface {
     functionFragment: "getSubmissionKey",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "getUserSubmissionKeyAt",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getUserSubmissionKeys",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getUserSubmissionSummaries",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "initialize", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "proxiableUUID",
@@ -280,6 +358,10 @@ export interface SyncContractInterface extends Interface {
   decodeFunctionResult(functionFragment: "rateData", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "submitData", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "transferAdmin",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "transferMintAuthority",
     data: BytesLike
   ): Result;
@@ -287,6 +369,23 @@ export interface SyncContractInterface extends Interface {
     functionFragment: "upgradeToAndCall",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "userSubmissionCount",
+    data: BytesLike
+  ): Result;
+}
+
+export namespace AdminTransferredEvent {
+  export type InputTuple = [oldAdmin: AddressLike, newAdmin: AddressLike];
+  export type OutputTuple = [oldAdmin: string, newAdmin: string];
+  export interface OutputObject {
+    oldAdmin: string;
+    newAdmin: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace AgentAllowedEvent {
@@ -520,6 +619,24 @@ export interface SyncContract extends BaseContract {
 
   getSubmissionKey: TypedContractMethod<[dataLink: string], [string], "view">;
 
+  getUserSubmissionKeyAt: TypedContractMethod<
+    [user: AddressLike, index: BigNumberish],
+    [string],
+    "view"
+  >;
+
+  getUserSubmissionKeys: TypedContractMethod<
+    [user: AddressLike, start: BigNumberish, limit: BigNumberish],
+    [string[]],
+    "view"
+  >;
+
+  getUserSubmissionSummaries: TypedContractMethod<
+    [user: AddressLike, start: BigNumberish, limit: BigNumberish],
+    [SyncContract.SubmissionSummaryStructOutput[]],
+    "view"
+  >;
+
   initialize: TypedContractMethod<
     [admin_: AddressLike, creditToken_: AddressLike],
     [void],
@@ -557,6 +674,12 @@ export interface SyncContract extends BaseContract {
     "nonpayable"
   >;
 
+  transferAdmin: TypedContractMethod<
+    [newAdmin: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   transferMintAuthority: TypedContractMethod<
     [newAuthority: AddressLike],
     [void],
@@ -567,6 +690,12 @@ export interface SyncContract extends BaseContract {
     [newImplementation: AddressLike, data: BytesLike],
     [void],
     "payable"
+  >;
+
+  userSubmissionCount: TypedContractMethod<
+    [arg0: AddressLike],
+    [bigint],
+    "view"
   >;
 
   getFunction<T extends ContractMethod = ContractMethod>(
@@ -621,6 +750,27 @@ export interface SyncContract extends BaseContract {
     nameOrSignature: "getSubmissionKey"
   ): TypedContractMethod<[dataLink: string], [string], "view">;
   getFunction(
+    nameOrSignature: "getUserSubmissionKeyAt"
+  ): TypedContractMethod<
+    [user: AddressLike, index: BigNumberish],
+    [string],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getUserSubmissionKeys"
+  ): TypedContractMethod<
+    [user: AddressLike, start: BigNumberish, limit: BigNumberish],
+    [string[]],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getUserSubmissionSummaries"
+  ): TypedContractMethod<
+    [user: AddressLike, start: BigNumberish, limit: BigNumberish],
+    [SyncContract.SubmissionSummaryStructOutput[]],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "initialize"
   ): TypedContractMethod<
     [admin_: AddressLike, creditToken_: AddressLike],
@@ -662,6 +812,9 @@ export interface SyncContract extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "transferAdmin"
+  ): TypedContractMethod<[newAdmin: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "transferMintAuthority"
   ): TypedContractMethod<[newAuthority: AddressLike], [void], "nonpayable">;
   getFunction(
@@ -671,7 +824,17 @@ export interface SyncContract extends BaseContract {
     [void],
     "payable"
   >;
+  getFunction(
+    nameOrSignature: "userSubmissionCount"
+  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
+  getEvent(
+    key: "AdminTransferred"
+  ): TypedContractEvent<
+    AdminTransferredEvent.InputTuple,
+    AdminTransferredEvent.OutputTuple,
+    AdminTransferredEvent.OutputObject
+  >;
   getEvent(
     key: "AgentAllowed"
   ): TypedContractEvent<
@@ -737,6 +900,17 @@ export interface SyncContract extends BaseContract {
   >;
 
   filters: {
+    "AdminTransferred(address,address)": TypedContractEvent<
+      AdminTransferredEvent.InputTuple,
+      AdminTransferredEvent.OutputTuple,
+      AdminTransferredEvent.OutputObject
+    >;
+    AdminTransferred: TypedContractEvent<
+      AdminTransferredEvent.InputTuple,
+      AdminTransferredEvent.OutputTuple,
+      AdminTransferredEvent.OutputObject
+    >;
+
     "AgentAllowed(address)": TypedContractEvent<
       AgentAllowedEvent.InputTuple,
       AgentAllowedEvent.OutputTuple,

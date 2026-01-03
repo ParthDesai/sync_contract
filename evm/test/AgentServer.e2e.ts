@@ -114,7 +114,7 @@ async function deployContracts(_provider: ethers.JsonRpcProvider, admin: ethers.
   }
 
   const tokenArtifact = await loadArtifact(
-    path.join(evmDir, "artifacts/contracts/SyncoraCreditToken.sol/SyncoraCreditToken.json")
+    path.join(evmDir, "artifacts/contracts/StrovaCreditToken.sol/StrovaCreditToken.json")
   );
 
   const implArtifact = await loadArtifact(path.join(evmDir, "artifacts/contracts/SyncContract.sol/SyncContract.json"));
@@ -248,6 +248,33 @@ describe("agent_server e2e", function () {
         // Assert on-chain effect: accumulatedCredits(user) increased by 55
         const credits: bigint = await syncTyped.accumulatedCredits(userAddr);
         expect(credits).to.equal(55n);
+
+        // Query API: user submissions (paginated)
+        const q0 = await fetch(
+          `http://127.0.0.1:${serverPort}/users/${userAddr}/submissions?start=0&limit=10`,
+          { headers: { origin: "http://localhost:3000" } }
+        );
+        expect(q0.status).to.equal(200);
+        const q0Body = await q0.json();
+        console.log("q0Body", q0Body);
+        expect(q0Body.user.toLowerCase()).to.equal(userAddr.toLowerCase());
+        expect(q0Body.total).to.equal("1");
+        expect(q0Body.items).to.be.an("array");
+        expect(q0Body.items.length).to.equal(1);
+        expect(q0Body.items[0].dataLink).to.equal(dataLink);
+        expect(q0Body.items[0].domain).to.equal("ipfs");
+        expect(q0Body.items[0].dataType).to.equal("image");
+        expect(q0Body.items[0].dataFormat).to.equal("png");
+        expect(q0Body.items[0].fileSizeInKb).to.equal("123");
+
+        const q1 = await fetch(
+          `http://127.0.0.1:${serverPort}/users/${userAddr}/submissions?start=1&limit=10`,
+          { headers: { origin: "http://localhost:3000" } }
+        );
+        expect(q1.status).to.equal(200);
+        const q1Body = await q1.json();
+        expect(q1Body.total).to.equal("1");
+        expect(q1Body.items.length).to.equal(0);
       } finally {
         srv.kill("SIGKILL");
       }

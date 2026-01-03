@@ -82,9 +82,13 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Errors__factory>;
     getContractFactory(
-      name: "ISyncoraCreditToken",
+      name: "IStrovaCreditToken",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.ISyncoraCreditToken__factory>;
+    ): Promise<Contracts.IStrovaCreditToken__factory>;
+    getContractFactory(
+      name: "StrovaCreditToken",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.StrovaCreditToken__factory>;
     getContractFactory(
       name: "SyncContract",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -93,10 +97,6 @@ declare module "hardhat/types/runtime" {
       name: "SyncContractProxy",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.SyncContractProxy__factory>;
-    getContractFactory(
-      name: "SyncoraCreditToken",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.SyncoraCreditToken__factory>;
 
     getContractAt(
       name: "Initializable",
@@ -184,10 +184,15 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.Errors>;
     getContractAt(
-      name: "ISyncoraCreditToken",
+      name: "IStrovaCreditToken",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.ISyncoraCreditToken>;
+    ): Promise<Contracts.IStrovaCreditToken>;
+    getContractAt(
+      name: "StrovaCreditToken",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.StrovaCreditToken>;
     getContractAt(
       name: "SyncContract",
       address: string | ethers.Addressable,
@@ -198,11 +203,6 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.SyncContractProxy>;
-    getContractAt(
-      name: "SyncoraCreditToken",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.SyncoraCreditToken>;
 
     deployContract(
       name: "Initializable",
@@ -273,9 +273,13 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Errors>;
     deployContract(
-      name: "ISyncoraCreditToken",
+      name: "IStrovaCreditToken",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ISyncoraCreditToken>;
+    ): Promise<Contracts.IStrovaCreditToken>;
+    deployContract(
+      name: "StrovaCreditToken",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.StrovaCreditToken>;
     deployContract(
       name: "SyncContract",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -284,10 +288,6 @@ declare module "hardhat/types/runtime" {
       name: "SyncContractProxy",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SyncContractProxy>;
-    deployContract(
-      name: "SyncoraCreditToken",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SyncoraCreditToken>;
 
     deployContract(
       name: "Initializable",
@@ -375,10 +375,15 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Errors>;
     deployContract(
-      name: "ISyncoraCreditToken",
+      name: "IStrovaCreditToken",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ISyncoraCreditToken>;
+    ): Promise<Contracts.IStrovaCreditToken>;
+    deployContract(
+      name: "StrovaCreditToken",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.StrovaCreditToken>;
     deployContract(
       name: "SyncContract",
       args: any[],
@@ -389,11 +394,6 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SyncContractProxy>;
-    deployContract(
-      name: "SyncoraCreditToken",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SyncoraCreditToken>;
 
     // default types
     getContractFactory(

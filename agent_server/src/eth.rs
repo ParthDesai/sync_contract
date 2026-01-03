@@ -4,15 +4,8 @@ use ethers::types::{Address, TxHash, U256};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-// Minimal ABI for SyncContract.rateData(...) and getSubmissionKey(...)
-abigen!(
-    SyncContract,
-    r#"[
-        function createAgent() external
-        function rateData(string dataLink, bool isSeedDeleted, bool isValid, bool hasRating, uint8 rating, bool hasSyntheticDataLink, string syntheticDataLink, bool sendTokensImmediately) external
-        function getSubmissionKey(string dataLink) external view returns (bytes32)
-    ]"#,
-);
+// Full ABI generated from the Hardhat artifact (kept in-repo so Rust stays in sync with Solidity).
+abigen!(SyncContract, "abi/SyncContract.json");
 
 #[async_trait::async_trait]
 pub trait EthApi: Send + Sync {
@@ -21,6 +14,15 @@ pub trait EthApi: Send + Sync {
     async fn submission_key(&self, data_link: &str) -> anyhow::Result<[u8; 32]>;
 
     async fn create_agent(&self) -> anyhow::Result<TxHash>;
+
+    async fn user_submission_count(&self, user: Address) -> anyhow::Result<U256>;
+
+    async fn user_submission_summaries(
+        &self,
+        user: Address,
+        start: U256,
+        limit: U256,
+    ) -> anyhow::Result<Vec<sync_contract::SubmissionSummary>>;
 
     async fn rate(
         &self,
@@ -71,6 +73,32 @@ impl EthApi for EthClient {
             .context("failed waiting for createAgent receipt")?
             .context("createAgent tx dropped from mempool")?;
         Ok(receipt.transaction_hash)
+    }
+
+    async fn user_submission_count(&self, user: Address) -> Result<U256> {
+        let c = self
+            .contract
+            .user_submission_count(user)
+            .call()
+            .await
+            .context("userSubmissionCount call failed")?;
+        Ok(c)
+    }
+
+    async fn user_submission_summaries(
+        &self,
+        user: Address,
+        start: U256,
+        limit: U256,
+    ) -> Result<Vec<sync_contract::SubmissionSummary>> {
+        let rows = self
+            .contract
+            .get_user_submission_summaries(user, start, limit)
+            .call()
+            .await
+            .context("getUserSubmissionSummaries call failed")?;
+
+        Ok(rows)
     }
 
     async fn rate(

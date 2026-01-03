@@ -5,7 +5,7 @@ pub mod eth;
 use axum::{routing::{get, post}, Router};
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
-use crate::api::{create_agent_handler, health_handler, rate_handler, AppState};
+use crate::api::{create_agent_handler, health_handler, rate_handler, user_submissions_handler, AppState};
 
 /// Build the Axum router. Exposed for integration tests.
 pub fn build_router(state: AppState) -> Router {
@@ -30,6 +30,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health", get(health_handler))
         .route("/create-agent", post(create_agent_handler))
         .route("/rate", post(rate_handler))
+        .route("/users/:user/submissions", get(user_submissions_handler))
         .layer(cors)
         .with_state(state)
 }

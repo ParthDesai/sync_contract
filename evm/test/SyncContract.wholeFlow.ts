@@ -67,6 +67,27 @@ type Sync = BaseContract & {
   transferMintAuthority(newAuthority: string): Promise<ContractTransactionResponse>;
   getSubmissionKey(dataLink: string): Promise<string>;
   getSubmission(dataKey: string): Promise<Submission>;
+  userSubmissionCount(user: string): Promise<bigint>;
+  getUserSubmissionKeys(user: string, start: bigint, limit: bigint): Promise<string[]>;
+  getUserSubmissionSummaries(
+    user: string,
+    start: bigint,
+    limit: bigint
+  ): Promise<
+    Array<{
+      dataKey: string;
+      user: string;
+      timestamp: bigint;
+      dataLink: string;
+      domain: string;
+      dataType: string;
+      dataFormat: string;
+      fileSizeInKB: bigint;
+      primaryCategory: string;
+      secondaryCategory: string;
+      isRated: boolean;
+    }>
+  >;
   agentConfigs(agent: string): Promise<AgentCfg>;
   accumulatedCredits(user: string): Promise<bigint>;
 };
@@ -83,8 +104,8 @@ describe("SyncContract (whole flow port)", () => {
   it("matches the Solana whole-flow behavior", async () => {
     const [payer, agent, user, newAuthority] = await ethers.getSigners();
 
-    const Token = await ethers.getContractFactory("SyncoraCreditToken");
-    const token = (await Token.deploy("Syncora Credit", "SYNCRED", 9, payer.address)) as unknown as Token;
+    const Token = await ethers.getContractFactory("StrovaCreditToken");
+    const token = (await Token.deploy("Strova Credit", "Strova", 9, payer.address)) as unknown as Token;
     await token.waitForDeployment();
 
     const Impl = await ethers.getContractFactory("SyncContract");
@@ -155,6 +176,19 @@ describe("SyncContract (whole flow port)", () => {
     expect(sub0.header.primaryCategory).to.equal(bytes32RightPadUtf8(primaryCategory));
     expect(sub0.header.secondaryCategory).to.equal(bytes32RightPadUtf8(secondaryCategory));
 
+    // User index / pagination should include this submission
+    expect(await sync.userSubmissionCount(user.address)).to.equal(1n);
+    const keysPage0 = await sync.getUserSubmissionKeys(user.address, 0n, 10n);
+    expect(keysPage0).to.deep.equal([dataKey]);
+    const summaries0 = await sync.getUserSubmissionSummaries(user.address, 0n, 10n);
+    expect(summaries0.length).to.equal(1);
+    expect(summaries0[0].dataKey).to.equal(dataKey);
+    expect(summaries0[0].user).to.equal(user.address);
+    expect(summaries0[0].domain).to.equal(domain);
+    expect(summaries0[0].dataType).to.equal(dataType);
+    expect(summaries0[0].dataFormat).to.equal(dataFormat);
+    expect(summaries0[0].fileSizeInKB).to.equal(BigInt(fileSizeInKB));
+
     // Disabled agent cannot rate
     await expect(
       asSync(sync.connect(agent)).rateData(dataLink, true, true, true, 100, false, "", false)
@@ -223,6 +257,7 @@ describe("SyncContract (whole flow port)", () => {
     );
     await asSync(sync.connect(agent)).rateData(dataLink1, true, false, true, 82, false, "", false);
     expect(await sync.accumulatedCredits(user.address)).to.equal(85);
+    expect(await sync.userSubmissionCount(user.address)).to.equal(2n);
 
     // Valid but NO rating => credits 0, accumulated unchanged
     const dataLink1b = "Hello world 1b";
@@ -252,6 +287,7 @@ describe("SyncContract (whole flow port)", () => {
     expect(sub1b.response.isValid).to.equal(true);
     expect(sub1b.response.hasRating).to.equal(false);
     expect(sub1b.response.calculatedCredits).to.equal(0);
+    expect(await sync.userSubmissionCount(user.address)).to.equal(3n);
 
     // Third submission: valid & rated => +20 credits
     const dataLink2 = "Hello world 2";
@@ -275,6 +311,7 @@ describe("SyncContract (whole flow port)", () => {
       false
     );
     expect(await sync.accumulatedCredits(user.address)).to.equal(105);
+    expect(await sync.userSubmissionCount(user.address)).to.equal(4n);
 
     // Fourth submission: send tokens immediately => balance increases, accumulated unchanged
     const dataLink3 = "Hello world 3";
@@ -302,6 +339,11 @@ describe("SyncContract (whole flow port)", () => {
     const afterBal = await token.balanceOf(user.address);
     expect(afterBal - beforeBal).to.equal(57n * 10n ** 9n);
     expect(await sync.accumulatedCredits(user.address)).to.equal(105);
+    expect(await sync.userSubmissionCount(user.address)).to.equal(5n);
+
+    // Pagination: fetch last 2 keys
+    const last2 = await sync.getUserSubmissionKeys(user.address, 3n, 10n);
+    expect(last2.length).to.equal(2);
 
     // Claim credits => user gets +105 tokens and accumulated resets
     const beforeClaim = await token.balanceOf(user.address);
