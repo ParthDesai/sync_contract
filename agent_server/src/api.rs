@@ -216,7 +216,7 @@ pub async fn rate_handler(
     }
 
     let is_seed_deleted = req.is_seed_deleted.unwrap_or(true);
-    let send_tokens_immediately = req.send_tokens_immediately.unwrap_or(false);
+    let send_tokens_immediately = req.send_tokens_immediately.unwrap_or(true);
 
     // Compute key for response (view call)
     let data_key = match state.eth.submission_key(&req.data_link).await {
