@@ -24,6 +24,44 @@ import type {
 } from "../common";
 
 export declare namespace SyncContract {
+  export type EvaluationJobStruct = {
+    exists: boolean;
+    modelLink: string;
+    baseScore: BigNumberish;
+    baseModel: string;
+  };
+
+  export type EvaluationJobStructOutput = [
+    exists: boolean,
+    modelLink: string,
+    baseScore: bigint,
+    baseModel: string
+  ] & {
+    exists: boolean;
+    modelLink: string;
+    baseScore: bigint;
+    baseModel: string;
+  };
+
+  export type FineTuneJobStruct = {
+    exists: boolean;
+    modelLink: string;
+    baseScore: BigNumberish;
+    fineTunedScore: string;
+  };
+
+  export type FineTuneJobStructOutput = [
+    exists: boolean,
+    modelLink: string,
+    baseScore: bigint,
+    fineTunedScore: string
+  ] & {
+    exists: boolean;
+    modelLink: string;
+    baseScore: bigint;
+    fineTunedScore: string;
+  };
+
   export type DataHeaderStruct = {
     primaryCategory: BytesLike;
     secondaryCategory: BytesLike;
@@ -160,6 +198,8 @@ export interface SyncContractInterface extends Interface {
       | "claimCredits"
       | "createAgent"
       | "creditToken"
+      | "getEvaluationJob"
+      | "getFineTuneJob"
       | "getSubmission"
       | "getSubmissionKey"
       | "getUserSubmissionKeyAt"
@@ -172,6 +212,8 @@ export interface SyncContractInterface extends Interface {
       | "transferAdmin"
       | "transferMintAuthority"
       | "upgradeToAndCall"
+      | "upsertEvaluationJob"
+      | "upsertFineTuneJob"
       | "userSubmissionCount"
   ): FunctionFragment;
 
@@ -183,6 +225,8 @@ export interface SyncContractInterface extends Interface {
       | "CreditsClaimed"
       | "DataRated"
       | "DataSubmitted"
+      | "EvaluationJobUpserted"
+      | "FineTuneJobUpserted"
       | "Initialized(uint64)"
       | "Initialized(address,address)"
       | "MintAuthorityTransferred"
@@ -229,6 +273,14 @@ export interface SyncContractInterface extends Interface {
   encodeFunctionData(
     functionFragment: "creditToken",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getEvaluationJob",
+    values: [string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getFineTuneJob",
+    values: [string]
   ): string;
   encodeFunctionData(
     functionFragment: "getSubmission",
@@ -288,6 +340,14 @@ export interface SyncContractInterface extends Interface {
     values: [AddressLike, BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "upsertEvaluationJob",
+    values: [string, string, BigNumberish, string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "upsertFineTuneJob",
+    values: [string, string, BigNumberish, string]
+  ): string;
+  encodeFunctionData(
     functionFragment: "userSubmissionCount",
     values: [AddressLike]
   ): string;
@@ -331,6 +391,14 @@ export interface SyncContractInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "getEvaluationJob",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getFineTuneJob",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getSubmission",
     data: BytesLike
   ): Result;
@@ -367,6 +435,14 @@ export interface SyncContractInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "upgradeToAndCall",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "upsertEvaluationJob",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "upsertFineTuneJob",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -482,6 +558,30 @@ export namespace DataSubmittedEvent {
     dataKey: string;
     user: string;
     dataLink: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace EvaluationJobUpsertedEvent {
+  export type InputTuple = [jobId: string];
+  export type OutputTuple = [jobId: string];
+  export interface OutputObject {
+    jobId: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace FineTuneJobUpsertedEvent {
+  export type InputTuple = [jobId: string];
+  export type OutputTuple = [jobId: string];
+  export interface OutputObject {
+    jobId: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -611,6 +711,18 @@ export interface SyncContract extends BaseContract {
 
   creditToken: TypedContractMethod<[], [string], "view">;
 
+  getEvaluationJob: TypedContractMethod<
+    [jobId: string],
+    [SyncContract.EvaluationJobStructOutput],
+    "view"
+  >;
+
+  getFineTuneJob: TypedContractMethod<
+    [jobId: string],
+    [SyncContract.FineTuneJobStructOutput],
+    "view"
+  >;
+
   getSubmission: TypedContractMethod<
     [dataKey: BytesLike],
     [SyncContract.DataSubmissionStructOutput],
@@ -692,6 +804,28 @@ export interface SyncContract extends BaseContract {
     "payable"
   >;
 
+  upsertEvaluationJob: TypedContractMethod<
+    [
+      jobId: string,
+      modelLink: string,
+      baseScore: BigNumberish,
+      baseModel: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  upsertFineTuneJob: TypedContractMethod<
+    [
+      jobId: string,
+      modelLink: string,
+      baseScore: BigNumberish,
+      fineTunedScore: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+
   userSubmissionCount: TypedContractMethod<
     [arg0: AddressLike],
     [bigint],
@@ -739,6 +873,20 @@ export interface SyncContract extends BaseContract {
   getFunction(
     nameOrSignature: "creditToken"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "getEvaluationJob"
+  ): TypedContractMethod<
+    [jobId: string],
+    [SyncContract.EvaluationJobStructOutput],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getFineTuneJob"
+  ): TypedContractMethod<
+    [jobId: string],
+    [SyncContract.FineTuneJobStructOutput],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "getSubmission"
   ): TypedContractMethod<
@@ -825,6 +973,30 @@ export interface SyncContract extends BaseContract {
     "payable"
   >;
   getFunction(
+    nameOrSignature: "upsertEvaluationJob"
+  ): TypedContractMethod<
+    [
+      jobId: string,
+      modelLink: string,
+      baseScore: BigNumberish,
+      baseModel: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "upsertFineTuneJob"
+  ): TypedContractMethod<
+    [
+      jobId: string,
+      modelLink: string,
+      baseScore: BigNumberish,
+      fineTunedScore: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "userSubmissionCount"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
@@ -869,6 +1041,20 @@ export interface SyncContract extends BaseContract {
     DataSubmittedEvent.InputTuple,
     DataSubmittedEvent.OutputTuple,
     DataSubmittedEvent.OutputObject
+  >;
+  getEvent(
+    key: "EvaluationJobUpserted"
+  ): TypedContractEvent<
+    EvaluationJobUpsertedEvent.InputTuple,
+    EvaluationJobUpsertedEvent.OutputTuple,
+    EvaluationJobUpsertedEvent.OutputObject
+  >;
+  getEvent(
+    key: "FineTuneJobUpserted"
+  ): TypedContractEvent<
+    FineTuneJobUpsertedEvent.InputTuple,
+    FineTuneJobUpsertedEvent.OutputTuple,
+    FineTuneJobUpsertedEvent.OutputObject
   >;
   getEvent(
     key: "Initialized(uint64)"
@@ -964,6 +1150,28 @@ export interface SyncContract extends BaseContract {
       DataSubmittedEvent.InputTuple,
       DataSubmittedEvent.OutputTuple,
       DataSubmittedEvent.OutputObject
+    >;
+
+    "EvaluationJobUpserted(string)": TypedContractEvent<
+      EvaluationJobUpsertedEvent.InputTuple,
+      EvaluationJobUpsertedEvent.OutputTuple,
+      EvaluationJobUpsertedEvent.OutputObject
+    >;
+    EvaluationJobUpserted: TypedContractEvent<
+      EvaluationJobUpsertedEvent.InputTuple,
+      EvaluationJobUpsertedEvent.OutputTuple,
+      EvaluationJobUpsertedEvent.OutputObject
+    >;
+
+    "FineTuneJobUpserted(string)": TypedContractEvent<
+      FineTuneJobUpsertedEvent.InputTuple,
+      FineTuneJobUpsertedEvent.OutputTuple,
+      FineTuneJobUpsertedEvent.OutputObject
+    >;
+    FineTuneJobUpserted: TypedContractEvent<
+      FineTuneJobUpsertedEvent.InputTuple,
+      FineTuneJobUpsertedEvent.OutputTuple,
+      FineTuneJobUpsertedEvent.OutputObject
     >;
 
     "Initialized(uint64)": TypedContractEvent<

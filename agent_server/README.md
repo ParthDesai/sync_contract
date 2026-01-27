@@ -101,6 +101,40 @@ Example:
 curl -sS "http://127.0.0.1:8080/users/0x1111111111111111111111111111111111111111/submissions?start=0&limit=10"
 ```
 
+### Evaluation job storage
+
+#### `POST /jobs/evaluation`
+
+Upsert (create/update) an evaluation job by `jobId`.
+
+```bash
+curl -sS -X POST http://127.0.0.1:8080/jobs/evaluation \
+  -H 'content-type: application/json' \
+  -d '{"jobId":"job-1","modelLink":"https://...","baseScore":"85","baseModel":"llama3"}'
+```
+
+#### `GET /jobs/evaluation/:jobId`
+
+```bash
+curl -sS http://127.0.0.1:8080/jobs/evaluation/job-1
+```
+
+### Fine tune job storage
+
+#### `POST /jobs/fine-tune`
+
+```bash
+curl -sS -X POST http://127.0.0.1:8080/jobs/fine-tune \
+  -H 'content-type: application/json' \
+  -d '{"jobId":"job-1","modelLink":"https://...","baseScore":"85","fineTunedScore":"92"}'
+```
+
+#### `GET /jobs/fine-tune/:jobId`
+
+```bash
+curl -sS http://127.0.0.1:8080/jobs/fine-tune/job-1
+```
+
 ## Install / Build / Run
 
 Per repo rule, this folder includes a `Cargo.toml.template`. Copy it to `Cargo.toml` locally.

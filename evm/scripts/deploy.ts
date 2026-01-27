@@ -3,6 +3,7 @@ import hre from "hardhat";
 const { ethers, network } = hre;
 
 type DeployResult = {
+  mode: "full" | "upgrade";
   network: string;
   chainId: number;
   deployer: string;
@@ -17,9 +18,17 @@ function envOr(name: string, fallback?: string): string | undefined {
   return v && v.trim().length > 0 ? v.trim() : fallback;
 }
 
+function mustEnv(name: string): string {
+  const v = envOr(name);
+  if (!v) throw new Error(`${name} is required`);
+  return v;
+}
+
 async function main() {
   const [deployer] = await ethers.getSigners();
   const deployerAddr = await deployer.getAddress();
+
+  const mode = (envOr("DEPLOY_MODE", "full") as "full" | "upgrade") || "full";
 
   const admin = envOr("SYNC_ADMIN", deployerAddr)!;
   const tokenName = envOr("TOKEN_NAME", "Strova Credits")!;
@@ -34,6 +43,62 @@ async function main() {
 
   console.log(`network=${network.name} chainId=${chainId}`);
   console.log(`deployer=${deployerAddr}`);
+  console.log(`mode=${mode}`);
+
+  // -------------------------
+  // UPGRADE-ONLY MODE
+  // -------------------------
+  // Deploy a new implementation and upgrade the existing proxy via UUPS `upgradeToAndCall`.
+  // Keeps proxy address unchanged.
+  if (mode === "upgrade") {
+    const proxyAddr = mustEnv("SYNC_CONTRACT_PROXY");
+    const upgradeCalldata = envOr("UPGRADE_CALLDATA", "0x")!;
+
+    const Impl = await ethers.getContractFactory("SyncContract");
+    const impl = await Impl.deploy();
+    await impl.waitForDeployment();
+    const implAddr = await impl.getAddress();
+    console.log(`newImplementation=${implAddr}`);
+
+    const sync = await ethers.getContractAt("SyncContract", proxyAddr, deployer);
+    // NOTE: caller must be current admin (authorizeUpgrade).
+    const tx = await sync.upgradeToAndCall(implAddr, upgradeCalldata);
+    console.log(`upgradeTxHash=${tx.hash}`);
+    await tx.wait();
+
+    // Optional verification: verify the new implementation only.
+    if (process.env.VERIFY === "true") {
+      try {
+        await hre.run("verify:verify", { address: implAddr, constructorArguments: [] });
+        console.log(`verified=${implAddr}`);
+      } catch (e: any) {
+        const msg = (e?.message || String(e)) as string;
+        if (msg.toLowerCase().includes("already verified")) {
+          console.log(`alreadyVerified=${implAddr}`);
+        } else {
+          console.warn(`verifyFailed=${implAddr} error=${msg}`);
+        }
+      }
+    }
+
+    const out: DeployResult = {
+      mode,
+      network: network.name,
+      chainId,
+      deployer: deployerAddr,
+      admin: await sync.admin(),
+      token: await sync.creditToken(),
+      implementation: implAddr,
+      proxy: proxyAddr
+    };
+
+    console.log("deployResult=", JSON.stringify(out, null, 2));
+    return;
+  }
+
+  // -------------------------
+  // FULL DEPLOY MODE
+  // -------------------------
   console.log(`admin=${admin}`);
 
   // 1) Deploy ERC20 token with deployer as initial mint authority (then transfer to proxy).
@@ -91,6 +156,7 @@ async function main() {
   }
 
   const out: DeployResult = {
+    mode,
     network: network.name,
     chainId,
     deployer: deployerAddr,

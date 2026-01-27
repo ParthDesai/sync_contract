@@ -25,6 +25,7 @@ contract SyncContract is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradea
     error ErrAgentAlreadyCreated();
     error ErrAlreadyInitializedSubmission();
     error ErrZeroAddress();
+    error ErrJobAlreadyExists();
 
     // -------- Constants (mirror Solana sizes) --------
     uint256 public constant DATA_LINK_SIZE = 256;
@@ -77,6 +78,24 @@ contract SyncContract is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradea
     mapping(address => uint256) public userSubmissionCount;
     mapping(address => mapping(uint256 => bytes32)) private _userSubmissionKeyAt;
 
+    // -------- Job storage (keyed by jobId) --------
+    struct EvaluationJob {
+        bool exists;
+        string modelLink; // URL
+        uint256 baseScore;
+        string baseModel;
+    }
+
+    struct FineTuneJob {
+        bool exists;
+        string modelLink; // URL
+        uint256 baseScore;
+        string fineTunedScore; // kept as string per requirement
+    }
+
+    mapping(string => EvaluationJob) private _evaluationJobs;
+    mapping(string => FineTuneJob) private _fineTuneJobs;
+
     struct SubmissionSummary {
         bytes32 dataKey;
         address user;
@@ -109,10 +128,21 @@ contract SyncContract is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradea
     );
     event CreditsClaimed(address indexed user, uint256 credits, uint256 tokenAmount);
     event MintAuthorityTransferred(address indexed newAuthority);
+    event EvaluationJobUpserted(string indexed jobId);
+    event FineTuneJobUpserted(string indexed jobId);
 
     // -------- Modifiers --------
     modifier onlyAdmin() {
         if (msg.sender != admin) revert ErrCallerNotAdmin();
+        _;
+    }
+
+    modifier onlyAdminOrEnabledAgent() {
+        if (msg.sender == admin) {
+            _;
+            return;
+        }
+        if (!agentConfigs[msg.sender].isEnabled) revert ErrAgentIsNotEnabled();
         _;
     }
 
@@ -154,6 +184,46 @@ contract SyncContract is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradea
         if (!cfg.exists) revert ErrAgentNotCreated();
         cfg.isEnabled = true;
         emit AgentAllowed(agent);
+    }
+
+    // -------- Job storage API --------
+
+    /// @notice Create or update an evaluation job by jobId.
+    function upsertEvaluationJob(
+        string calldata jobId,
+        string calldata modelLink,
+        uint256 baseScore,
+        string calldata baseModel
+    ) external onlyAdminOrEnabledAgent {
+        EvaluationJob storage j = _evaluationJobs[jobId];
+        j.exists = true;
+        j.modelLink = modelLink;
+        j.baseScore = baseScore;
+        j.baseModel = baseModel;
+        emit EvaluationJobUpserted(jobId);
+    }
+
+    function getEvaluationJob(string calldata jobId) external view returns (EvaluationJob memory) {
+        return _evaluationJobs[jobId];
+    }
+
+    /// @notice Create or update a fine tune job by jobId.
+    function upsertFineTuneJob(
+        string calldata jobId,
+        string calldata modelLink,
+        uint256 baseScore,
+        string calldata fineTunedScore
+    ) external onlyAdminOrEnabledAgent {
+        FineTuneJob storage j = _fineTuneJobs[jobId];
+        j.exists = true;
+        j.modelLink = modelLink;
+        j.baseScore = baseScore;
+        j.fineTunedScore = fineTunedScore;
+        emit FineTuneJobUpserted(jobId);
+    }
+
+    function getFineTuneJob(string calldata jobId) external view returns (FineTuneJob memory) {
+        return _fineTuneJobs[jobId];
     }
 
     function submitData(

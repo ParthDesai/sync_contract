@@ -55,8 +55,8 @@ impl EthApi for MockEth {
         _user: Address,
         _start: U256,
         _limit: U256,
-    ) -> anyhow::Result<Vec<agent_server::eth::sync_contract::GetUserSubmissionSummariesReturn0>> {
-        Ok(vec![agent_server::eth::sync_contract::GetUserSubmissionSummariesReturn0 {
+    ) -> anyhow::Result<Vec<agent_server::eth::sync_contract::SubmissionSummary>> {
+        Ok(vec![agent_server::eth::sync_contract::SubmissionSummary {
             data_key: [0xAAu8; 32],
             user: Address::repeat_byte(0x11),
             timestamp: U256::from(123u64),
@@ -64,11 +64,55 @@ impl EthApi for MockEth {
             domain: "ipfs".to_string(),
             data_type: "image".to_string(),
             data_format: "png".to_string(),
-            file_size_in_k_b: U256::from(10u64),
+            file_size_in_kb: U256::from(10u64),
             primary_category: [0u8; 32],
             secondary_category: [0u8; 32],
             is_rated: false,
         }])
+    }
+
+    async fn get_evaluation_job(
+        &self,
+        _job_id: String,
+    ) -> anyhow::Result<agent_server::eth::sync_contract::EvaluationJob> {
+        Ok(agent_server::eth::sync_contract::EvaluationJob {
+            exists: true,
+            model_link: "https://example.com/model".to_string(),
+            base_score: U256::from(80u64),
+            base_model: "base-model".to_string(),
+        })
+    }
+
+    async fn upsert_evaluation_job(
+        &self,
+        _job_id: String,
+        _model_link: String,
+        _base_score: U256,
+        _base_model: String,
+    ) -> anyhow::Result<TxHash> {
+        Ok(self.tx)
+    }
+
+    async fn get_fine_tune_job(
+        &self,
+        _job_id: String,
+    ) -> anyhow::Result<agent_server::eth::sync_contract::FineTuneJob> {
+        Ok(agent_server::eth::sync_contract::FineTuneJob {
+            exists: true,
+            model_link: "https://example.com/model-ft".to_string(),
+            base_score: U256::from(80u64),
+            fine_tuned_score: "90".to_string(),
+        })
+    }
+
+    async fn upsert_fine_tune_job(
+        &self,
+        _job_id: String,
+        _model_link: String,
+        _base_score: U256,
+        _fine_tuned_score: String,
+    ) -> anyhow::Result<TxHash> {
+        Ok(self.tx)
     }
 
     async fn rate(

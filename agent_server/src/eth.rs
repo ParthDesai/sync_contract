@@ -24,6 +24,30 @@ pub trait EthApi: Send + Sync {
         limit: U256,
     ) -> anyhow::Result<Vec<sync_contract::SubmissionSummary>>;
 
+    async fn get_evaluation_job(
+        &self,
+        job_id: String,
+    ) -> anyhow::Result<sync_contract::EvaluationJob>;
+
+    async fn upsert_evaluation_job(
+        &self,
+        job_id: String,
+        model_link: String,
+        base_score: U256,
+        base_model: String,
+    ) -> anyhow::Result<TxHash>;
+
+    async fn get_fine_tune_job(&self, job_id: String)
+        -> anyhow::Result<sync_contract::FineTuneJob>;
+
+    async fn upsert_fine_tune_job(
+        &self,
+        job_id: String,
+        model_link: String,
+        base_score: U256,
+        fine_tuned_score: String,
+    ) -> anyhow::Result<TxHash>;
+
     async fn rate(
         &self,
         data_link: String,
@@ -99,6 +123,70 @@ impl EthApi for EthClient {
             .context("getUserSubmissionSummaries call failed")?;
 
         Ok(rows)
+    }
+
+    async fn get_evaluation_job(&self, job_id: String) -> Result<sync_contract::EvaluationJob> {
+        let v = self
+            .contract
+            .get_evaluation_job(job_id)
+            .call()
+            .await
+            .context("getEvaluationJob call failed")?;
+        Ok(v)
+    }
+
+    async fn upsert_evaluation_job(
+        &self,
+        job_id: String,
+        model_link: String,
+        base_score: U256,
+        base_model: String,
+    ) -> Result<TxHash> {
+        let _g = self.send_lock.lock().await;
+        let contract_call = self
+            .contract
+            .upsert_evaluation_job(job_id, model_link, base_score, base_model);
+        let pending = contract_call
+            .send()
+            .await
+            .context("failed to send upsertEvaluationJob tx")?;
+        let receipt = pending
+            .await
+            .context("failed waiting for upsertEvaluationJob receipt")?
+            .context("upsertEvaluationJob tx dropped from mempool")?;
+        Ok(receipt.transaction_hash)
+    }
+
+    async fn get_fine_tune_job(&self, job_id: String) -> Result<sync_contract::FineTuneJob> {
+        let v = self
+            .contract
+            .get_fine_tune_job(job_id)
+            .call()
+            .await
+            .context("getFineTuneJob call failed")?;
+        Ok(v)
+    }
+
+    async fn upsert_fine_tune_job(
+        &self,
+        job_id: String,
+        model_link: String,
+        base_score: U256,
+        fine_tuned_score: String,
+    ) -> Result<TxHash> {
+        let _g = self.send_lock.lock().await;
+        let contract_call = self
+            .contract
+            .upsert_fine_tune_job(job_id, model_link, base_score, fine_tuned_score);
+        let pending = contract_call
+            .send()
+            .await
+            .context("failed to send upsertFineTuneJob tx")?;
+        let receipt = pending
+            .await
+            .context("failed waiting for upsertFineTuneJob receipt")?
+            .context("upsertFineTuneJob tx dropped from mempool")?;
+        Ok(receipt.transaction_hash)
     }
 
     async fn rate(
